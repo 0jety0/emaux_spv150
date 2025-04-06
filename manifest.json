@@ -1,0 +1,14 @@
+{
+    "domain": "pool pump",
+    "name": "Emaux spv150",
+    "codeowners": [
+        "@0jety0"
+    ],
+    "config_flow": false,
+    "documentation": "https://github.com/0jety0/emaux_spv150",
+    "issue_tracker": "https://github.com/0jety0/emaux_spv150/issues",
+    "integration_type": "device",
+    "iot_class": "calculated",
+    "quality_scale": "silver",
+    "version": "0.0.1"
+}
