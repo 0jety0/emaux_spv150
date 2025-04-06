@@ -39,10 +39,11 @@ class TutoHacsElapsedSecondEntity(SensorEntity):
         self._attr_name = entry_infos.get("name")
         self._attr_unique_id = entry_infos.get("entity_id")
         self._attr_has_entity_name = True
+        self._attr_native_value = 12
 
     @property
     def icon(self) -> str | None:
-        return "mdi:timer-play"
+        return "mdi:pump"
 
     @property
     def device_class(self) -> SensorDeviceClass | None:
@@ -55,3 +56,8 @@ class TutoHacsElapsedSecondEntity(SensorEntity):
     @property
     def native_unit_of_measurement(self) -> str | None:
         return UnitOfTime.SECONDS
+
+    @property
+    def should_poll(self) -> bool:
+        """Do not poll for those entities"""
+        return False
