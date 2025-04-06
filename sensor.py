@@ -5,7 +5,12 @@ import logging
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.const import UnitOfTime
+from homeassistant.components.sensor import (
+    SensorEntity,
+    SensorDeviceClass,
+    SensorStateClass,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,3 +39,19 @@ class TutoHacsElapsedSecondEntity(SensorEntity):
         self._attr_name = entry_infos.get("name")
         self._attr_unique_id = entry_infos.get("entity_id")
         self._attr_has_entity_name = True
+
+    @property
+    def icon(self) -> str | None:
+        return "mdi:timer-play"
+
+    @property
+    def device_class(self) -> SensorDeviceClass | None:
+        return SensorDeviceClass.DURATION
+
+    @property
+    def state_class(self) -> SensorStateClass | None:
+        return SensorStateClass.MEASUREMENT
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        return UnitOfTime.SECONDS
