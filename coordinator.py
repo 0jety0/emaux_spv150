@@ -7,6 +7,7 @@ import aiohttp
 import async_timeout
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+import json
 
 from .const import DOMAIN
 
@@ -23,20 +24,28 @@ class EmauxCoordinator(DataUpdateCoordinator[dict[str, str]]):
         )
         self.host = host
 
-    async def _async_update_data(self) -> dict[str, str]:
+    async def _async_update_data(self):
+        """Mise à jour des données depuis l'Emaux"""
         url = f"http://{self.host}/cgi-bin/EpvCgi?name=AllRd&val=0&type=get&time={int(time.time() * 1000)}"
         try:
-            async with async_timeout.timeout(10):
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(url) as response:
-                        if response.status != 200:
-                            raise UpdateFailed(f"HTTP error: {response.status}")
-
-                        content_type = response.headers.get("Content-Type", "")
-                        if "application/json" not in content_type:
-                            raise UpdateFailed(f"Unexpected Content-Type: {content_type}")
-
-                        return await response.json()
-
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url) as response:
+                    content_type = response.headers.get("Content-Type", "")
+                    _LOGGER.info(f"Content-Type: {content_type}")
+                    if response.status == 200:
+                        if "json" in content_type:
+                            return await response.json()
+                        else:
+                            html_content = await response.text()
+                            try:
+                                data = json.loads(html_content)
+                                return data
+                            except json.JSONDecodeError:
+                                _LOGGER.error("Erreur de décodage JSON")
+                                raise ValueError(f"Erreur de contenu, impossible de décoder le JSON : {content_type}")
+                    else:
+                        _LOGGER.warning("Réponse invalide de l'API: %s", response.status)
+                        raise Exception(f"Erreur HTTP: {response.status}")
         except Exception as err:
-            raise UpdateFailed(f"Error fetching Emaux data: {err}") from err
+            _LOGGER.error("Erreur lors de la récupération des données: %s", err)
+            raise
