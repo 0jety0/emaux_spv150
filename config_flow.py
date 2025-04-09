@@ -1,18 +1,24 @@
+import logging
+
 import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.core import callback
 from homeassistant.const import CONF_HOST
-from .const import DOMAIN, DEFAULT_HOST
+from homeassistant.data_entry_flow import FlowResult
+
+from .const import DEFAULT_HOST, DOMAIN
 
 
-class EmauxSPV150ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    VERSION = 1
+class EmauxSpv150ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Emaux SPV150."""
 
-    async def async_step_user(self, user_input=None):
+    async def async_step_user(self, user_input=None) -> FlowResult:
+        """Handle the initial step."""
+        errors = {}
         if user_input is not None:
-            return self.async_create_entry(title="SPV-150", data=user_input)
+            host = user_input[CONF_HOST]
+            return self.async_create_entry(title="SPV150", data={CONF_HOST: host})
 
-        schema = vol.Schema(
+        data_schema = vol.Schema(
             {
                 vol.Required(CONF_HOST, default=DEFAULT_HOST): str,
             }
@@ -20,7 +26,6 @@ class EmauxSPV150ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="user",
-            data_schema=schema,
-            description_placeholders={},
-            errors={},
+            data_schema=data_schema,
+            errors=errors,
         )
