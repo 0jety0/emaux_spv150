@@ -1,24 +1,40 @@
-"""Initialisation du package de l'intégration HACS Tuto"""
-
 import logging
-
-from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_HOST
+from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN, PLATFORMS
+from .const import DEFAULT_HOST, DOMAIN, PLATFORMS
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup(hass: HomeAssistant, config: ConfigEntry):  # pylint: disable=unused-argument
-    """Initialisation de l'intégration"""
+async def async_setup(hass: HomeAssistant, config: dict):
+    return True
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
+    host = entry.data.get(CONF_HOST, DEFAULT_HOST)
+
     _LOGGER.info(
         "Initializing %s integration with plaforms: %s with config: %s",
         DOMAIN,
+        host,
         PLATFORMS,
-        config,
     )
 
-    my_config = config.get(DOMAIN)  # pylint: disable=unused-variable
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN][entry.entry_id] = {
+        "host": host,
+    }
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
+    await hass.config_entries.async_forward_entry_unload(entry, PLATFORMS)
+
+    if DOMAIN in hass.data and entry.entry_id in hass.data[DOMAIN]:
+        del hass.data[DOMAIN][entry.entry_id]
 
     return True

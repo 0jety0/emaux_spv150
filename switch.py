@@ -1,9 +1,10 @@
 import logging
-import aiohttp
 
+import aiohttp
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.helpers.entity import EntityCategory
-from .const import DOMAIN, DEFAULT_HOST
+
+from .const import DEFAULT_HOST, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 

@@ -1,8 +1,9 @@
 import logging
-import aiohttp
 
+import aiohttp
 from homeassistant.components.number import NumberEntity
-from .const import DOMAIN, DEFAULT_HOST
+
+from .const import DEFAULT_HOST, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
