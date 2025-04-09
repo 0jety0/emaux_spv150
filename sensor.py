@@ -13,16 +13,12 @@ from .const import DOMAIN
 from .coordinator import EmauxCoordinator
 
 
-async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
-) -> None:
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     coordinator: EmauxCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
 
     async_add_entities(
         [
-            EmauxSensor(
-                coordinator, "CurrentWatts", "Puissance", UnitOfPower.WATT, "mdi:flash"
-            ),
+            EmauxSensor(coordinator, "CurrentWatts", "Puissance", UnitOfPower.WATT, "mdi:flash"),
             EmauxSensor(
                 coordinator,
                 "CurrentSpeed",
@@ -30,11 +26,11 @@ async def async_setup_entry(
                 "rpm",
                 "mdi:rotate-right",
             ),
-            EmauxSensor(
-                coordinator, "RunningStatus", "Statut pompe", None, "mdi:power"
-            ),
+            EmauxSensor(coordinator, "RunningStatus", "Statut pompe", None, "mdi:power"),
         ]
     )
+
+    await coordinator.async_refresh()
 
 
 class EmauxSensor(SensorEntity):
