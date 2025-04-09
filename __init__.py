@@ -35,7 +35,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    await hass.config_entries.async_forward_entry_unload(entry, PLATFORMS)
-    hass.data[DOMAIN].pop(entry.entry_id, None)
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    if entry.entry_id in hass.data.get(DOMAIN, {}):
+        return False
+    await hass.data[DOMAIN]["sensor"].async_setup_entry(entry)
+    await hass.data[DOMAIN]["number"].async_setup_entry(entry)
     return True

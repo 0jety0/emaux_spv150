@@ -22,7 +22,9 @@ MAX_SPEED = 3400
 STEP_SPEED = 100
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
     host = entry.data[CONF_HOST]
     coordinator: EmauxCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     async_add_entities([EmauxPumpSpeedNumberEntity(host, coordinator)])

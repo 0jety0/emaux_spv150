@@ -1,13 +1,13 @@
 # custom_components/emaux_spv150/coordinator.py
 
+import json
 import logging
 import time
+from datetime import timedelta
 
 import aiohttp
-import async_timeout
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-import json
 
 from .const import DOMAIN
 
@@ -20,7 +20,7 @@ class EmauxCoordinator(DataUpdateCoordinator[dict[str, str]]):
             hass,
             _LOGGER,
             name="Emaux SPV150 Coordinator",
-            update_interval=None,
+            update_interval=timedelta(seconds=1),
         )
         self.host = host
 
@@ -42,9 +42,13 @@ class EmauxCoordinator(DataUpdateCoordinator[dict[str, str]]):
                                 return data
                             except json.JSONDecodeError:
                                 _LOGGER.error("Erreur de décodage JSON")
-                                raise ValueError(f"Erreur de contenu, impossible de décoder le JSON : {content_type}")
+                                raise ValueError(
+                                    f"Erreur de contenu, impossible de décoder le JSON : {content_type}"
+                                )
                     else:
-                        _LOGGER.warning("Réponse invalide de l'API: %s", response.status)
+                        _LOGGER.warning(
+                            "Réponse invalide de l'API: %s", response.status
+                        )
                         raise Exception(f"Erreur HTTP: {response.status}")
         except Exception as err:
             _LOGGER.error("Erreur lors de la récupération des données: %s", err)
