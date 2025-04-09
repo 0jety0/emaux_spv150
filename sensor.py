@@ -57,11 +57,6 @@ class EmauxSensor(SensorEntity):
             return "on" if value == "1" else "off"
         return value
 
-    @property
-    def available(self) -> bool:
-        """Return if the sensor is available."""
-        return self.coordinator.last_update_success
-
     async def async_update(self):
         """Update the sensor with the latest data from the coordinator."""
         await self.coordinator.async_request_refresh()
