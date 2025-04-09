@@ -6,14 +6,15 @@ from homeassistant.const import UnitOfPower
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-
+import logging
 from .const import DOMAIN
+from .coordinator import EmauxCoordinator
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     """Set up the Emaux SPV150 sensors."""
-    from .coordinator import EmauxCoordinator  # Importation tardive
-
     coordinator: EmauxCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
 
     # Add sensors
@@ -22,6 +23,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
             EmauxSensor(coordinator, "CurrentWatts", "Puissance", UnitOfPower.WATT, "mdi:flash"),
             EmauxSensor(coordinator, "CurrentSpeed", "Vitesse actuelle", "rpm", "mdi:rotate-right"),
             EmauxSensor(coordinator, "RunningStatus", "Statut pompe", None, "mdi:power"),
+            EmauxSensor(coordinator, "Temperature", "Température", "°C", "mdi:thermometer"),
         ]
     )
 

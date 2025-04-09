@@ -12,18 +12,6 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entities):
-    """Configure the coordinator for Emaux SPV150."""
-    host = config_entry.data["host"]
-    coordinator = EmauxCoordinator(hass, host)
-
-    # Start the coordinator and refresh data
-    await coordinator.async_config_entry_first_refresh()
-
-    # Store the coordinator for use in other parts of the integration
-    hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = {"coordinator": coordinator}
-
-
 class EmauxCoordinator(DataUpdateCoordinator):
     def __init__(self, hass: HomeAssistant, host: str) -> None:
         """Initialize the coordinator."""
