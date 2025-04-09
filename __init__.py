@@ -35,10 +35,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    if DOMAIN not in hass.data:
-        hass.data[DOMAIN] = {}
-    coordinator = EmauxCoordinator(hass, entry.data["host"])
-    hass.data[DOMAIN][entry.entry_id] = {"coordinator": coordinator}
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
+    """Nettoyage lors de la suppression de l'intégration."""
     await hass.config_entries.async_forward_entry_unload(entry, PLATFORMS)
+
+    if DOMAIN in hass.data and entry.entry_id in hass.data[DOMAIN]:
+        del hass.data[DOMAIN][entry.entry_id]
+
     return True
