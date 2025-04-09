@@ -36,8 +36,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    if entry.entry_id in hass.data.get(DOMAIN, {}):
-        return False
-    await hass.data[DOMAIN]["sensor"].async_setup_entry(entry)
-    await hass.data[DOMAIN]["number"].async_setup_entry(entry)
+    if DOMAIN not in hass.data:
+        hass.data[DOMAIN] = {}
+    coordinator = EmauxCoordinator(hass, entry.data["host"])
+    hass.data[DOMAIN][entry.entry_id] = {"coordinator": coordinator}
+    await hass.config_entries.async_forward_entry_unload(entry, PLATFORMS)
     return True
