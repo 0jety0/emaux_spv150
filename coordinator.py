@@ -20,9 +20,10 @@ class EmauxCoordinator(DataUpdateCoordinator[dict[str, str]]):
             hass,
             _LOGGER,
             name="Emaux SPV150 Coordinator",
-            update_interval=timedelta(seconds=1),
+            update_interval=timedelta(seconds=10),
         )
         self.host = host
+        self.data = {}
 
     async def _async_update_data(self):
         """Mise à jour des données depuis l'Emaux"""
@@ -42,13 +43,9 @@ class EmauxCoordinator(DataUpdateCoordinator[dict[str, str]]):
                                 return data
                             except json.JSONDecodeError:
                                 _LOGGER.error("Erreur de décodage JSON")
-                                raise ValueError(
-                                    f"Erreur de contenu, impossible de décoder le JSON : {content_type}"
-                                )
+                                raise ValueError(f"Erreur de contenu, impossible de décoder le JSON : {content_type}")
                     else:
-                        _LOGGER.warning(
-                            "Réponse invalide de l'API: %s", response.status
-                        )
+                        _LOGGER.warning("Réponse invalide de l'API: %s", response.status)
                         raise Exception(f"Erreur HTTP: {response.status}")
         except Exception as err:
             _LOGGER.error("Erreur lors de la récupération des données: %s", err)

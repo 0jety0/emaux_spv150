@@ -53,6 +53,4 @@ class EmauxSensor(SensorEntity):
     @property
     def native_value(self) -> str | int:
         value = self.coordinator.data.get(self._key)
-        if self._key == "RunningStatus":
-            return "on" if value == "1" else "off"
         return value
