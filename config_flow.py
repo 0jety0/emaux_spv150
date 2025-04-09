@@ -1,5 +1,4 @@
-import logging
-
+import ipaddress
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST
@@ -16,7 +15,11 @@ class EmauxSpv150ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         if user_input is not None:
             host = user_input[CONF_HOST]
-            return self.async_create_entry(title="SPV150", data={CONF_HOST: host})
+            try:
+                ipaddress.ip_address(host)
+                return self.async_create_entry(title="SPV150", data={CONF_HOST: host})
+            except ValueError:
+                ipaddress.ip_address(host)
 
         data_schema = vol.Schema(
             {

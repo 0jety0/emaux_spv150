@@ -10,5 +10,6 @@
     "integration_type": "device",
     "iot_class": "calculated",
     "quality_scale": "silver",
+    "platforms": ["number","sensor"],
     "version": "0.0.1"
 }
