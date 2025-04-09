@@ -1,8 +1,10 @@
+import logging
+
+import aiohttp
+import requests
 from homeassistant.components.number import NumberEntity
 from homeassistant.const import CONF_HOST
 from homeassistant.helpers.entity import EntityCategory
-import requests
-import logging
 
 from .const import DOMAIN
 
@@ -36,17 +38,30 @@ class EmauxPumpSpeedNumberEntity(NumberEntity):
         return self._value
 
     def set_speed(self, speed: int):
-        """Envoie la commande à la pompe via HTTP GET."""
         url = f"http://{self._host}/cgi-bin/EpvCgi?name=SetCurrentSpeed&val={speed}&type=set&time=Date.now()"
         try:
             response = requests.get(url, timeout=5)
             if response.status_code == 200:
                 _LOGGER.info("Commande envoyée à la pompe : %s", url)
             else:
-                _LOGGER.warning("Réponse invalide de la pompe: %s", response.status_code)
+                _LOGGER.warning(
+                    "Réponse invalide de la pompe: %s", response.status_code
+                )
         except requests.RequestException as e:
             _LOGGER.error("Erreur lors de la requête HTTP : %s", e)
 
     async def async_set_native_value(self, value: float) -> None:
         self._value = int(value)
-        self.set_speed(self._value)
+        url = f"http://{self._host}/cgi-bin/EpvCgi?name=SetCurrentSpeed&val={self._value}&type=set&time=Date.now()"
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=5) as response:
+                    if response.status == 200:
+                        _LOGGER.info("Commande envoyée à la pompe : %s", url)
+                    else:
+                        _LOGGER.warning(
+                            "Réponse invalide de la pompe: %s", response.status
+                        )
+        except aiohttp.ClientError as e:
+            _LOGGER.error("Erreur HTTP lors de la requête vers la pompe : %s", e)
