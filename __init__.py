@@ -3,6 +3,7 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
+from .coordinator import EmauxCoordinator
 
 from .const import DEFAULT_HOST, DOMAIN, PLATFORMS
 

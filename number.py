@@ -24,7 +24,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 class EmauxPumpSpeedNumberEntity(NumberEntity):
     def __init__(self, host):
         self._attr_name = "Speed"
-        self._attr_icon = "mdi:water-pump"
+        self._attr_icon = "mdi:pump"
         self._attr_unique_id = f"{host}_pump_speed"
         self._attr_native_min_value = MIN_SPEED
         self._attr_native_max_value = MAX_SPEED
@@ -45,9 +45,7 @@ class EmauxPumpSpeedNumberEntity(NumberEntity):
             if response.status_code == 200:
                 _LOGGER.info("Commande envoyée à la pompe : %s", url)
             else:
-                _LOGGER.warning(
-                    "Réponse invalide de la pompe: %s", response.status_code
-                )
+                _LOGGER.warning("Réponse invalide de la pompe: %s", response.status_code)
         except requests.RequestException as e:
             _LOGGER.error("Erreur lors de la requête HTTP : %s", e)
 
@@ -61,8 +59,6 @@ class EmauxPumpSpeedNumberEntity(NumberEntity):
                     if response.status == 200:
                         _LOGGER.info("Commande envoyée à la pompe : %s", url)
                     else:
-                        _LOGGER.warning(
-                            "Réponse invalide de la pompe: %s", response.status
-                        )
+                        _LOGGER.warning("Réponse invalide de la pompe: %s", response.status)
         except aiohttp.ClientError as e:
             _LOGGER.error("Erreur HTTP lors de la requête vers la pompe : %s", e)
