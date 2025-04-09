@@ -8,14 +8,12 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
-from .coordinator import EmauxCoordinator
-import logging
-
-_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     """Set up the Emaux SPV150 sensors."""
+    from .coordinator import EmauxCoordinator  # Importation tardive
+
     coordinator: EmauxCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
 
     # Add sensors

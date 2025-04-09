@@ -8,7 +8,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN
-from .sensor import EmauxSensor  # Utilisez une importation relative
 
 _LOGGER = logging.getLogger(__name__)
 
