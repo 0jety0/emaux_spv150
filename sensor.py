@@ -2,7 +2,7 @@ import logging
 
 import aiohttp
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.const import POWER_WATT, TEMP_CELSIUS
+from homeassistant.const import UnitOfTemperature, UnitOfPower
 from homeassistant.helpers.entity import EntityCategory
 
 from .const import DOMAIN
@@ -10,17 +10,9 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 SENSOR_TYPES = {
-    "CurrentSpeed": {
-        "name": "Vitesse actuelle",
-        "unit": "rpm",
-        "icon": "mdi:rotate-right",
-    },
-    "CurrentWatts": {"name": "Puissance", "unit": POWER_WATT, "icon": "mdi:flash"},
-    "CurrentTemperuture": {
-        "name": "Température",
-        "unit": TEMP_CELSIUS,
-        "icon": "mdi:thermometer",
-    },
+    "CurrentSpeed": {"name": "Vitesse actuelle", "unit": "rpm", "icon": "mdi:rotate-right"},
+    "CurrentWatts": {"name": "Puissance", "unit": UnitOfPower.WATT, "icon": "mdi:flash"},
+    "CurrentTemperuture": {"name": "Température", "unit": UnitOfTemperature.CELSIUS, "icon": "mdi:thermometer"},
     "CurrentGPM": {"name": "Débit", "unit": "GPM", "icon": "mdi:water"},
 }
 
@@ -55,8 +47,6 @@ class EmauxSensor(SensorEntity):
                         data = await response.json()
                         self._value = int(data.get(self._sensor_key, 0))
                     else:
-                        _LOGGER.warning(
-                            "Erreur lors de la requête capteur: %s", response.status
-                        )
+                        _LOGGER.warning("Erreur lors de la requête capteur: %s", response.status)
         except Exception as e:
             _LOGGER.error("Exception dans le capteur %s: %s", self._sensor_key, e)
