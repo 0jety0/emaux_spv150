@@ -31,6 +31,12 @@ class EmauxCoordinator(DataUpdateCoordinator[dict[str, str]]):
                     async with session.get(url) as response:
                         if response.status != 200:
                             raise UpdateFailed(f"HTTP error: {response.status}")
+
+                        content_type = response.headers.get("Content-Type", "")
+                        if "application/json" not in content_type:
+                            raise UpdateFailed(f"Unexpected Content-Type: {content_type}")
+
                         return await response.json()
+
         except Exception as err:
             raise UpdateFailed(f"Error fetching Emaux data: {err}") from err
