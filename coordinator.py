@@ -6,8 +6,9 @@ from datetime import timedelta
 import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from sensor import EmauxSensor
+
 from .const import DOMAIN
+from .sensor import EmauxSensor  # Utilisez une importation relative
 
 _LOGGER = logging.getLogger(__name__)
 
