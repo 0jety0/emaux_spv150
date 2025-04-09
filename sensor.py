@@ -1,52 +1,62 @@
-import logging
+# custom_components/emaux_spv150/sensor.py
 
-import aiohttp
+from __future__ import annotations
+
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.const import UnitOfTemperature, UnitOfPower
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import UnitOfPower
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
-
-_LOGGER = logging.getLogger(__name__)
-
-SENSOR_TYPES = {
-    "CurrentSpeed": {"name": "Vitesse actuelle", "unit": "rpm", "icon": "mdi:rotate-right"},
-    "CurrentWatts": {"name": "Puissance", "unit": UnitOfPower.WATT, "icon": "mdi:flash"},
-    "CurrentTemperuture": {"name": "Température", "unit": UnitOfTemperature.CELSIUS, "icon": "mdi:thermometer"},
-    "CurrentGPM": {"name": "Débit", "unit": "GPM", "icon": "mdi:water"},
-}
+from .coordinator import EmauxCoordinator
 
 
-async def async_setup_entry(hass, entry, async_add_entities):
-    host = hass.data[DOMAIN][entry.entry_id]["host"]
-    entities = [EmauxSensor(host, key, info) for key, info in SENSOR_TYPES.items()]
-    async_add_entities(entities, update_before_add=True)
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
+    coordinator: EmauxCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+
+    async_add_entities(
+        [
+            EmauxSensor(
+                coordinator, "CurrentWatts", "Puissance", UnitOfPower.WATT, "mdi:flash"
+            ),
+            EmauxSensor(
+                coordinator,
+                "CurrentSpeed",
+                "Vitesse actuelle",
+                "rpm",
+                "mdi:rotate-right",
+            ),
+            EmauxSensor(
+                coordinator, "RunningStatus", "Statut pompe", None, "mdi:power"
+            ),
+        ]
+    )
 
 
 class EmauxSensor(SensorEntity):
-    def __init__(self, host, sensor_key, sensor_info):
-        self._host = host
-        self._sensor_key = sensor_key
-        self._attr_name = sensor_info["name"]
-        self._attr_native_unit_of_measurement = sensor_info["unit"]
-        self._attr_icon = sensor_info["icon"]
-        self._attr_unique_id = f"{host}_{sensor_key.lower()}"
+    def __init__(
+        self,
+        coordinator: EmauxCoordinator,
+        key: str,
+        name: str,
+        unit: str | None,
+        icon: str,
+    ) -> None:
+        self.coordinator = coordinator
+        self._key = key
+        self._attr_name = name
+        self._attr_native_unit_of_measurement = unit
+        self._attr_icon = icon
+        self._attr_unique_id = f"{coordinator.host}_{key}"
         self._attr_entity_category = EntityCategory.DIAGNOSTIC
-        self._value = None
 
     @property
-    def native_value(self):
-        return self._value
-
-    async def async_update(self):
-        url = f"http://{self._host}/cgi-bin/EpvCgi?name=AllRd&val=0&type=get"
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=5) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        self._value = int(data.get(self._sensor_key, 0))
-                    else:
-                        _LOGGER.warning("Erreur lors de la requête capteur: %s", response.status)
-        except Exception as e:
-            _LOGGER.error("Exception dans le capteur %s: %s", self._sensor_key, e)
+    def native_value(self) -> str | int:
+        value = self.coordinator.data.get(self._key)
+        if self._key == "RunningStatus":
+            return "on" if value == "1" else "off"
+        return value

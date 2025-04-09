@@ -1,44 +1,36 @@
+# custom_components/emaux_spv150/coordinator.py
+
 import logging
 import time
-import async_timeout
-import aiohttp
 
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+import aiohttp
+import async_timeout
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class EmauxCoordinator(DataUpdateCoordinator):
-    def __init__(self, hass: HomeAssistant, host: str):
+class EmauxCoordinator(DataUpdateCoordinator[dict[str, str]]):
+    def __init__(self, hass: HomeAssistant, host: str) -> None:
         super().__init__(
             hass,
             _LOGGER,
             name="Emaux SPV150 Coordinator",
-            update_interval=None,  # uniquement quand demandé, pas de polling auto
+            update_interval=None,
         )
         self.host = host
 
-    async def _async_update_data(self):
+    async def _async_update_data(self) -> dict[str, str]:
         url = f"http://{self.host}/cgi-bin/EpvCgi?name=AllRd&val=0&type=get&time={int(time.time() * 1000)}"
-        _LOGGER.debug("Fetching Emaux status from %s", url)
-
         try:
             async with async_timeout.timeout(10):
                 async with aiohttp.ClientSession() as session:
                     async with session.get(url) as response:
                         if response.status != 200:
-                            raise UpdateFailed(f"HTTP Error: {response.status}")
-                        data = await response.json()
-
-                        _LOGGER.debug("Received data: %s", data)
-
-                        return {
-                            "CurrentSpeed": data.get("CurrentSpeed"),
-                            "CurrentWatts": data.get("CurrentWatts"),
-                            "RunningStatus": data.get("RunningStatus"),
-                        }
+                            raise UpdateFailed(f"HTTP error: {response.status}")
+                        return await response.json()
         except Exception as err:
             raise UpdateFailed(f"Error fetching Emaux data: {err}") from err
