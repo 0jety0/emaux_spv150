@@ -1,5 +1,3 @@
-# custom_components/emaux_spv150/sensor.py
-
 from __future__ import annotations
 
 from homeassistant.components.sensor import SensorEntity
@@ -11,26 +9,23 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
 from .coordinator import EmauxCoordinator
+import logging
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
+    """Set up the Emaux SPV150 sensors."""
     coordinator: EmauxCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
 
+    # Add sensors
     async_add_entities(
         [
             EmauxSensor(coordinator, "CurrentWatts", "Puissance", UnitOfPower.WATT, "mdi:flash"),
-            EmauxSensor(
-                coordinator,
-                "CurrentSpeed",
-                "Vitesse actuelle",
-                "rpm",
-                "mdi:rotate-right",
-            ),
+            EmauxSensor(coordinator, "CurrentSpeed", "Vitesse actuelle", "rpm", "mdi:rotate-right"),
             EmauxSensor(coordinator, "RunningStatus", "Statut pompe", None, "mdi:power"),
         ]
     )
-
-    await coordinator.async_refresh()
 
 
 class EmauxSensor(SensorEntity):
@@ -42,6 +37,7 @@ class EmauxSensor(SensorEntity):
         unit: str | None,
         icon: str,
     ) -> None:
+        """Initialize the sensor."""
         self.coordinator = coordinator
         self._key = key
         self._attr_name = name
@@ -52,5 +48,20 @@ class EmauxSensor(SensorEntity):
 
     @property
     def native_value(self) -> str | int:
+        """Return the state of the sensor."""
         value = self.coordinator.data.get(self._key)
+        if value is None:
+            _LOGGER.warning(f"No data found for key: {self._key}")
+            return None
+        if self._key == "RunningStatus":
+            return "on" if value == "1" else "off"
         return value
+
+    @property
+    def available(self) -> bool:
+        """Return if the sensor is available."""
+        return self.coordinator.last_update_success
+
+    async def async_update(self):
+        """Update the sensor with the latest data from the coordinator."""
+        await self.coordinator.async_request_refresh()
