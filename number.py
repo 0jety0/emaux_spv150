@@ -23,7 +23,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
 class EmauxPumpSpeedNumberEntity(NumberEntity):
     def __init__(self, host):
-        self._attr_name = "Vitesse pompe Emaux"
+        self._attr_name = "Speed"
+        self._attr_icon = "mdi:water-pump"
         self._attr_unique_id = f"{host}_pump_speed"
         self._attr_native_min_value = MIN_SPEED
         self._attr_native_max_value = MAX_SPEED

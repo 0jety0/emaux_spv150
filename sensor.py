@@ -1,60 +1,62 @@
-"""Implements the pool pump sensors component"""
-
 import logging
 
-from homeassistant.components.sensor import (SensorDeviceClass, SensorEntity,
-                                             SensorStateClass)
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfTime
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+import aiohttp
+from homeassistant.components.sensor import SensorEntity
+from homeassistant.const import POWER_WATT, TEMP_CELSIUS
+from homeassistant.helpers.entity import EntityCategory
+
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
+SENSOR_TYPES = {
+    "CurrentSpeed": {
+        "name": "Vitesse actuelle",
+        "unit": "rpm",
+        "icon": "mdi:rotate-right",
+    },
+    "CurrentWatts": {"name": "Puissance", "unit": POWER_WATT, "icon": "mdi:flash"},
+    "CurrentTemperuture": {
+        "name": "Température",
+        "unit": TEMP_CELSIUS,
+        "icon": "mdi:thermometer",
+    },
+    "CurrentGPM": {"name": "Débit", "unit": "GPM", "icon": "mdi:water"},
+}
 
-async def async_setup_platform(
-    hass: HomeAssistant,
-    entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
-    discovery_info=None,  # pylint: disable=unused-argument
-):
-    _LOGGER.debug("Calling async_setup_entry entry=%s", entry)
 
-    entity = TutoHacsElapsedSecondEntity(hass, entry)
-    async_add_entities([entity], True)
+async def async_setup_entry(hass, entry, async_add_entities):
+    host = hass.data[DOMAIN][entry.entry_id]["host"]
+    entities = [EmauxSensor(host, key, info) for key, info in SENSOR_TYPES.items()]
+    async_add_entities(entities, update_before_add=True)
 
 
-class TutoHacsElapsedSecondEntity(SensorEntity):
-    """La classe de l'entité TutoHacs"""
-
-    def __init__(
-        self,
-        hass: HomeAssistant,  # pylint: disable=unused-argument
-        entry_infos,  # pylint: disable=unused-argument
-    ) -> None:
-        """Initisalisation de notre entité"""
-        self._attr_name = entry_infos.get("name")
-        self._attr_unique_id = entry_infos.get("entity_id")
-        self._attr_has_entity_name = True
-        self._attr_native_value = 12
-
-    @property
-    def icon(self) -> str | None:
-        return "mdi:pump"
-
-    @property
-    def device_class(self) -> SensorDeviceClass | None:
-        return SensorDeviceClass.DURATION
+class EmauxSensor(SensorEntity):
+    def __init__(self, host, sensor_key, sensor_info):
+        self._host = host
+        self._sensor_key = sensor_key
+        self._attr_name = sensor_info["name"]
+        self._attr_native_unit_of_measurement = sensor_info["unit"]
+        self._attr_icon = sensor_info["icon"]
+        self._attr_unique_id = f"{host}_{sensor_key.lower()}"
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        self._value = None
 
     @property
-    def state_class(self) -> SensorStateClass | None:
-        return SensorStateClass.MEASUREMENT
+    def native_value(self):
+        return self._value
 
-    @property
-    def native_unit_of_measurement(self) -> str | None:
-        return UnitOfTime.SECONDS
-
-    @property
-    def should_poll(self) -> bool:
-        """Do not poll for those entities"""
-        return False
+    async def async_update(self):
+        url = f"http://{self._host}/cgi-bin/EpvCgi?name=AllRd&val=0&type=get"
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=5) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        self._value = int(data.get(self._sensor_key, 0))
+                    else:
+                        _LOGGER.warning(
+                            "Erreur lors de la requête capteur: %s", response.status
+                        )
+        except Exception as e:
+            _LOGGER.error("Exception dans le capteur %s: %s", self._sensor_key, e)
