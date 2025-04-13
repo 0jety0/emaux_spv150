@@ -1,0 +1,105 @@
+# emaux_spv150 pour Home Assistant
+
+![downloads](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=utilisateurs%20HACS&suffix=%20installations&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.emaux_spv150.total)
+![version](https://img.shields.io/badge/version-2.0.0-blue)
+
+Intégration personnalisée Home Assistant pour contrôler et surveiller la pompe de piscine à vitesse variable **Emaux SPV150**.
+
+![image info](/img/main.jpeg)
+
+## Fonctionnalités v2.0.0
+
+### Supervision
+- Puissance consommée (W) et débit (GPM) en temps réel
+- Énergie cumulée (kWh) — compatible dashboard Énergie HA
+- Temps de fonctionnement depuis le dernier démarrage
+
+### Contrôle
+- Vitesse courante (RPM) et preset de vitesse (1/2/3) modifiables depuis l'UI
+- Throttle configurable entre changements de vitesse (défaut : 60 s) pour protéger la pompe
+- Séquence de démarrage : attente automatique de la fin du priming (défaut : 120 s, conforme manuel SPV150 section 5) uniquement lors d'une mise sous tension physique (switch OFF→ON)
+
+### Mode solaire — régulateur P avec bande morte
+- Sélecteur de mode : `Off` / `Manuel` / `Solaire` — **persisté entre les redémarrages**
+- Entité puissance réseau configurable (n'importe quelle entité HA, ex: `sensor.puissance_reseau`)
+- **Régulateur proportionnel (P)** centré sur un setpoint configurable :
+  - `error = |puissance_réseau - setpoint|`
+  - `step = min(step_max, max(10W, error))` — proportionnel au delta, plafonné
+  - En-dessous de la borne inférieure de la bande morte → vitesse + step
+  - Au-dessus de la borne supérieure → vitesse − step
+  - Dans la bande morte → aucune action
+- Régulation active immédiatement si la pompe tourne déjà lors du passage en mode solaire
+- Protection données périmées : si la valeur réseau n'a pas changé depuis plus de 60 s, la régulation est suspendue
+- Tous les paramètres (setpoint, bande morte, pas, mode, vitesses min/max) **persistés entre les redémarrages**
+
+### Qualité HA
+- Appareil unique regroupant toutes les entités
+- Reconfiguration sans suppression (bouton "Reconfigurer")
+- Protection anti-doublons, test de connexion au moment de la configuration
+- Statistiques long terme (LTS) pour les capteurs de mesure
+- Traductions complètes
+
+## Installation
+
+### Via HACS (recommandé)
+
+1. Assurez-vous que [HACS](https://hacs.xyz/) est installé.
+2. Dans HACS, allez dans **Intégrations**.
+3. Cliquez sur les trois points (⋮) > **Dépôts personnalisés**.
+4. Ajoutez l'URL de ce dépôt et sélectionnez **Intégration**.
+5. Installez `emaux_spv150` depuis HACS.
+6. Redémarrez Home Assistant.
+
+### Installation manuelle
+
+1. Copiez le dossier `custom_components/emaux_spv150` dans `config/custom_components/` de votre instance HA.
+2. Redémarrez Home Assistant.
+
+## Configuration initiale
+
+1. **Paramètres > Appareils & Services > Ajouter une intégration**
+2. Recherchez `emaux_spv150`
+3. Saisissez l'adresse IP de la pompe
+4. (optionnel) Sélectionnez un switch externe pour couper le polling quand la pompe est hors tension
+
+La pompe est testée (ping HTTP) avant validation. Il est impossible d'ajouter deux fois la même IP.
+
+## Options configurables
+
+Accessibles via **Paramètres > Appareils & Services > Emaux SPV150 > Configurer** :
+
+| Paramètre | Description | Défaut |
+|-----------|-------------|--------|
+| Adresse IP | IP de la pompe | — |
+| Switch externe | Entité pour couper le polling | — |
+| Intervalle de polling | 5 / 15 / 30 / 60 secondes | 30 s |
+| Entité puissance réseau | Capteur HA pour le mode solaire | — |
+| Setpoint (W) | Puissance réseau cible du régulateur P | 0 W |
+| Borne inférieure bande morte (W) | En-dessous : accélérer | 0 W |
+| Borne supérieure bande morte (W) | Au-dessus : ralentir | 100 W |
+| Pas max montée (RPM) | Plafond du step proportionnel en montée | 300 RPM |
+| Pas max descente (RPM) | Plafond du step proportionnel en descente | 30 RPM |
+| Délai priming (s) | Attente après mise sous tension avant régulation solaire | 120 s |
+| Intervalle changement de vitesse (s) | Throttle entre deux commandes SetSpeed (0 = désactivé) | 60 s |
+
+## Entités créées
+
+| Entité | Type | Description |
+|--------|------|-------------|
+| `sensor.power` | Sensor | Puissance consommée (W) |
+| `sensor.flow_rate` | Sensor | Débit (GPM) |
+| `sensor.energy` | Sensor | Énergie cumulée (kWh) |
+| `sensor.uptime` | Sensor | Temps de fonctionnement (h) |
+| `number.speed` | Number | Vitesse courante (RPM) — slider |
+| `number.speed_preset` | Number | Preset de vitesse (1/2/3) — slider |
+| `number.setpoint` | Number | Setpoint du régulateur (W) |
+| `number.dead_band_lower` | Number | Borne inférieure bande morte (W) |
+| `number.dead_band_upper` | Number | Borne supérieure bande morte (W) |
+| `number.step_up` | Number | Pas max montée (RPM) |
+| `number.step_down` | Number | Pas max descente (RPM) |
+| `number.rpm_min_solar` | Number | Vitesse min en mode solaire (RPM) |
+| `number.rpm_max_solar` | Number | Vitesse max en mode solaire (RPM) |
+| `switch.running` | Switch | Démarrer / arrêter la pompe |
+| `select.control_mode` | Select | Off / Manuel / Solaire |
+
+![image info](/img/page_web.jpeg)

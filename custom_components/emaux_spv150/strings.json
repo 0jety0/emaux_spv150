@@ -1,0 +1,85 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure Emaux SPV150",
+        "data": {
+          "host": "Pump IP address",
+          "switch_entity": "External power switch entity (optional)",
+          "grid_power_entity": "Grid power sensor entity (optional, any entity_id)"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Emaux SPV150",
+        "data": {
+          "host": "Pump IP address",
+          "switch_entity": "External power switch entity (optional)",
+          "grid_power_entity": "Grid power sensor entity (optional, any entity_id)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the pump. Check the IP address and network."
+    },
+    "abort": {
+      "already_configured": "This pump is already configured.",
+      "reconfigure_successful": "Reconfiguration successful."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Update Emaux SPV150 settings",
+        "data": {
+          "host": "Pump IP address",
+          "switch_entity": "External power switch entity (optional)",
+          "poll_interval": "Polling interval (seconds)",
+          "grid_power_entity": "Grid power sensor entity (any entity_id)",
+          "setpoint": "Setpoint (W) — target grid power for the P-controller",
+          "dead_band_lower": "Dead band lower bound (W) — below this: speed up",
+          "dead_band_upper": "Dead band upper bound (W) — above this: speed down",
+          "step_up": "Max speed increase step (RPM)",
+          "step_down": "Max speed decrease step (RPM)",
+          "priming_time": "Startup priming wait (seconds) — delayed after physical switch ON",
+          "speed_change_interval": "Minimum interval between speed changes (seconds, 0 = no limit)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the pump. Check the IP address and network.",
+      "dead_band_range_invalid": "Dead band upper bound must be greater than or equal to lower bound."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "current_watts": { "name": "Power" },
+      "current_gpm": { "name": "Flow rate" },
+      "energy_kwh": { "name": "Energy" },
+      "uptime_hours": { "name": "Uptime" }
+    },
+    "number": {
+      "current_speed": { "name": "Speed" },
+      "speed_selected": { "name": "Speed preset" },
+      "setpoint": { "name": "Setpoint" },
+      "dead_band_lower": { "name": "Dead band lower bound" },
+      "dead_band_upper": { "name": "Dead band upper bound" },
+      "step_up": { "name": "Max speed increase step" },
+      "step_down": { "name": "Max speed decrease step" },
+      "rpm_min_solar": { "name": "Min speed (solar)" },
+      "rpm_max_solar": { "name": "Max speed (solar)" }
+    },
+    "switch": {
+      "running_status": { "name": "Running" }
+    },
+    "select": {
+      "control_mode": {
+        "name": "Control mode",
+        "state": {
+          "off": "Off",
+          "manual": "Manual",
+          "solar": "Solar"
+        }
+      }
+    }
+  }
+}
