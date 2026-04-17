@@ -32,13 +32,6 @@ Intégration personnalisée Home Assistant pour contrôler et surveiller la pomp
 - Protection données périmées : si la valeur réseau n'a pas changé depuis plus de 60 s, la régulation est suspendue
 - Tous les paramètres (setpoint, bande morte, pas, mode, vitesses min/max) **persistés entre les redémarrages**
 
-### Qualité HA
-- Appareil unique regroupant toutes les entités
-- Reconfiguration sans suppression (bouton "Reconfigurer")
-- Protection anti-doublons, test de connexion au moment de la configuration
-- Statistiques long terme (LTS) pour les capteurs de mesure
-- Traductions complètes
-
 ## Installation
 
 ### Via HACS (recommandé)
