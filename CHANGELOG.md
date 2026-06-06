@@ -2,40 +2,40 @@
 
 ## [2.1.0] — 2026-06-06
 
-### Nouvelles fonctionnalités
+### Features
 
-- **Timeout de requête configurable** : nouvelle entité `number` « Request timeout » (1–30 s, défaut 5 s), modifiable à chaud comme l'intervalle de polling. Le serveur CGI embarqué de la pompe étant lent/instable sur le LAN, le timeout passe de 2 s à 5 s par défaut pour réduire les faux `timed out`. Intervalle de polling et timeout sont tous deux ajustables depuis l'UI pour ne pas surcharger la pompe.
+- **Configurable request timeout**: new `number` entity "Request timeout" (1–30 s, default 5 s), adjustable at runtime like the polling interval. The pump's embedded CGI server is slow/flaky over the LAN, so the default timeout is raised from 2 s to 5 s to reduce false `timed out`. Both the polling interval and the timeout are adjustable from the UI so the pump is not overloaded.
 
-### Outils & projet
+### Tooling & project
 
-- **Migration vers `uv` + `ruff`** : `pyproject.toml` (PEP 621) remplace le `Pipfile` ; `ruff` (lint + format) remplace `black` + `isort` ; config `pytest` intégrée au `pyproject` (suppression de `pytest.ini`). `uv.lock` versionné. Outils de dev/CI uniquement — aucun impact sur le runtime HA.
-- **CI GitHub Actions** : `ruff check` + `ruff format --check` + `pytest` (via `uv`), en plus de `hassfest` et de la validation HACS.
-- **Licence** : [PolyForm Noncommercial 1.0.0](LICENSE) (usage personnel / non commercial).
+- **Migrated to `uv` + `ruff`**: `pyproject.toml` (PEP 621) replaces `Pipfile`; `ruff` (lint + format) replaces `black` + `isort`; `pytest` config moved into `pyproject` (`pytest.ini` removed); `uv.lock` committed. Dev/CI tooling only — no impact on the HA runtime.
+- **GitHub Actions CI**: `ruff check` + `ruff format --check` + `pytest` (via `uv`), in addition to `hassfest` and HACS validation.
+- **License**: [PolyForm Noncommercial 1.0.0](LICENSE) (personal / non-commercial use).
 
-### Corrections de bugs
+### Bug fixes
 
-- **`api.py` — JSON invalide** : `json.JSONDecodeError` est désormais capturé (réponse non-JSON, HTML d'erreur, corps vide) et renvoie `{}` au lieu de remonter une exception non gérée qui stoppait le polling.
-- **`api.py` — injection d'URL** : la clé de commande est encodée (`urllib.parse.quote`) avant d'être insérée dans l'URL ; la valeur est forcée en `int`.
-- **`api.py` — fuite d'information** : l'IP de la pompe n'apparaît plus dans les logs `ERROR` (déplacée en `DEBUG`).
-- **`coordinator.py` — reload intempestif** : ajuster un paramètre `number` local (setpoint, bande morte, pas, RPM, intervalle) ne recharge plus toute l'intégration. Le `update_listener` ne recharge que sur changement de connexion (IP / switch / entité réseau). L'énergie cumulée et l'uptime ne sont plus remis à zéro à chaque réglage.
-- **`coordinator.py` / `number.py` — invariants solaires** : `rpm_min_solar` ≤ `rpm_max_solar` **et** `dead_band_lower` ≤ `dead_band_upper` sont garantis ; les setters bornent automatiquement la valeur (avant, seul le config flow validait la bande morte).
-- **`__init__.py` — listener de reload sans course** : la décision de recharger compare les réglages de connexion (IP / switch / entité réseau) au lieu d'un drapeau, supprimant une fenêtre de course ; un réglage modifié via le formulaire d'options s'applique désormais à chaud (sans reload).
-- **`config_flow.py` — perte de `grid_power_entity`** : le formulaire d'options retombe sur `entry.data` (comme le switch), évitant d'effacer l'entité réseau lors d'une édition d'options.
-- **`sensor.py`** : échec de restauration de l'énergie loggé (`warning`) au lieu d'être avalé silencieusement.
-- **`RunningStatus`** : normalisé via `str()`, la détection marche que la pompe renvoie `"1"` ou `1`.
-- **Options flow** : un `switch_entity`/`grid_power_entity` valant `None` ne casse plus le formulaire d'options.
+- **`api.py` — invalid JSON**: `json.JSONDecodeError` is now caught (non-JSON response, error HTML, empty body) and returns `{}` instead of raising an unhandled exception that stopped polling.
+- **`api.py` — URL injection**: the command key is encoded (`urllib.parse.quote`) before being inserted into the URL; the value is forced to `int`.
+- **`api.py` — information leak**: the pump IP no longer appears in `ERROR` logs (moved to `DEBUG`).
+- **`coordinator.py` — spurious reload**: adjusting a local `number` parameter (setpoint, dead band, steps, RPM, interval) no longer reloads the whole integration. The `update_listener` only reloads on a connection change (IP / switch / grid entity). Cumulated energy and uptime are no longer reset on every adjustment.
+- **`coordinator.py` / `number.py` — solar invariants**: `rpm_min_solar` ≤ `rpm_max_solar` **and** `dead_band_lower` ≤ `dead_band_upper` are guaranteed; the setters auto-clamp the value (previously only the config flow validated the dead band).
+- **`__init__.py` — race-free reload listener**: the reload decision compares connection settings (IP / switch / grid entity) instead of a flag, removing a race window; a value changed via the options form now applies live (no reload).
+- **`config_flow.py` — `grid_power_entity` loss**: the options form falls back to `entry.data` (like the switch), avoiding wiping the grid entity when editing options.
+- **`sensor.py`**: a failed energy restore is logged (`warning`) instead of being silently swallowed.
+- **`RunningStatus`**: normalized via `str()`, so detection works whether the pump returns `"1"` or `1`.
+- **Options flow**: a `switch_entity`/`grid_power_entity` set to `None` no longer breaks the options form.
 
-### Améliorations techniques
+### Technical improvements
 
-- **DTO `PumpStatus`** (`models.py`) : les données pompe sont converties une seule fois en objet typé ; fin des `float(...)` / comparaisons de chaînes dispersés dans les entités.
-- **`SolarRegulator` + `SolarControllerConfig`** (`solar.py`) : le régulateur P est extrait du coordinator en unité pure et testable (SRP).
-- **`NumberEntityDescription` / `SensorEntityDescription`** : les entités `number` et `sensor` utilisent le pattern idiomatique HA (dataclass) ; les trois structures parallèles de `number.py` sont fusionnées en une seule source de vérité (DRY).
-- **Constante `GRID_POWER_STALENESS_SECONDS`** : le seuil de péremption de l'entité réseau n'est plus un magic number.
-- **`config_flow.py`** : validation du format IP / hostname (`invalid_host`) avant le test de connexion, sur les trois flux (initial, reconfigure, options).
-- **`coordinator` typé** `DataUpdateCoordinator[PumpStatus]`.
-- Suppression de `utils.py` (devenu inutile).
-- **Tests** : 38 tests pytest (régulateur solaire, API + cas d'erreur, énergie/uptime, reconfigure, invariants RPM, normalisation `RunningStatus`). Le test orphelin `enable_maintenance` a été retiré.
-- `Pipfile` : suppression de `re` (module stdlib, pas un paquet) et `pydantic` (inutilisé) ; dépendances de test explicites.
+- **`PumpStatus` DTO** (`models.py`): the pump data is converted once into a typed object; no more scattered `float(...)` / string comparisons across entities.
+- **`SolarRegulator` + `SolarControllerConfig`** (`solar.py`): the P-controller is extracted from the coordinator into a pure, testable unit (SRP).
+- **`NumberEntityDescription` / `SensorEntityDescription`**: the `number` and `sensor` entities use the idiomatic HA pattern (dataclass); the three parallel structures in `number.py` are merged into a single source of truth (DRY).
+- **`GRID_POWER_STALENESS_SECONDS` constant**: the grid-entity staleness threshold is no longer a magic number.
+- **`config_flow.py`**: IP / hostname format validation (`invalid_host`) before the connection test, across all three flows (initial, reconfigure, options).
+- **`coordinator` typed** `DataUpdateCoordinator[PumpStatus]`.
+- Removed `utils.py` (no longer needed).
+- **Tests**: 43 pytest tests (solar regulator, API + error cases, energy/uptime, reconfigure, RPM & dead-band invariants, `RunningStatus` normalization, configurable timeout). The orphaned `enable_maintenance` test was removed.
+- `Pipfile`: removed `re` (stdlib module, not a package) and `pydantic` (unused); explicit test dependencies.
 
 ---
 
@@ -49,79 +49,79 @@
 
 ## [2.0.0] — 2026-04-17
 
-### Nouvelles fonctionnalités
+### Features
 
-#### Qualité & architecture (HA Quality Scale Bronze/Silver/Gold)
-- **Appareil unique dans HA** : toutes les entités regroupées sous un seul appareil "Emaux SPV150"
-- **Statistiques long terme** : `CurrentWatts` et `CurrentGPM` utilisent `SensorStateClass.MEASUREMENT`
-- **Reconfiguration sans suppression** : bouton "Reconfigurer" pour changer IP/switch sans réinstaller
-- **Options modifiables** : IP, switch, intervalle de polling et paramètres solaires via "Configurer"
-- **Test de connexion** : la pompe est pingée avant de valider la configuration
-- **Protection contre les doublons** : impossible d'ajouter deux fois la même IP
-- **Classes d'appareil** : `SensorDeviceClass.POWER` sur Watts, `SensorDeviceClass.VOLUME_FLOW_RATE` sur GPM
-- **Traductions** : `strings.json` + `translations/en.json`
+#### Quality & architecture (HA Quality Scale Bronze/Silver/Gold)
+- **Single device in HA**: all entities grouped under a single "Emaux SPV150" device
+- **Long-term statistics**: `CurrentWatts` and `CurrentGPM` use `SensorStateClass.MEASUREMENT`
+- **Reconfigure without removal**: a "Reconfigure" button to change IP/switch without reinstalling
+- **Editable options**: IP, switch, polling interval and solar parameters via "Configure"
+- **Connection test**: the pump is pinged before the configuration is validated
+- **Duplicate protection**: the same IP cannot be added twice
+- **Device classes**: `SensorDeviceClass.POWER` on watts, `SensorDeviceClass.VOLUME_FLOW_RATE` on GPM
+- **Translations**: `strings.json` + `translations/en.json`
 
 #### Monitoring
-- **Énergie cumulée** (`sensor.energy`) : kWh accumulés, `SensorStateClass.TOTAL_INCREASING`, compatible dashboard Énergie
-- **Temps de fonctionnement** (`sensor.uptime`) : heures depuis le dernier démarrage
-- **Intervalle de polling configurable** : 5 / 15 / 30 / 60 secondes (défaut : 30 s)
+- **Cumulated energy** (`sensor.energy`): accumulated kWh, `SensorStateClass.TOTAL_INCREASING`, compatible with the Energy dashboard
+- **Uptime** (`sensor.uptime`): hours since the last start
+- **Configurable polling interval**: 5 / 15 / 30 / 60 seconds (default: 30 s)
 
-#### Contrôle de vitesse — protection et séquencement
-- **Throttle configurable** (`speed_change_interval`) : intervalle minimum entre deux changements de vitesse (défaut : 60 s)
-- **Priming au démarrage physique** : lors d'une mise sous tension via le switch externe (OFF→ON), attente de la fin du priming (défaut : 120 s) avant d'activer la régulation solaire. Dans tous les autres cas, la régulation s'applique immédiatement.
+#### Speed control — protection and sequencing
+- **Configurable throttle** (`speed_change_interval`): minimum interval between two speed changes (default: 60 s)
+- **Priming on physical start**: on power-on via the external switch (OFF→ON), wait for priming to finish (default: 120 s) before enabling solar regulation. In all other cases, regulation applies immediately.
 
-#### Mode solaire — régulateur P avec bande morte
-- **Sélecteur de mode** (`select.control_mode`) : `Off` / `Manuel` / `Solaire` — **persisté entre les redémarrages**
-- **Entité puissance réseau configurable** : accepte n'importe quelle entité HA
-- **Régulateur proportionnel (P)** centré sur un setpoint configurable :
+#### Solar mode — P-controller with dead band
+- **Mode selector** (`select.control_mode`): `Off` / `Manual` / `Solar` — **persisted across restarts**
+- **Configurable grid-power entity**: accepts any HA entity
+- **Proportional (P) controller** centred on a configurable setpoint:
   - `error = |grid_power - setpoint|`
-  - `step = min(step_max, max(10, int(error)))` — proportionnel au delta, plafonné
-  - En-dessous de la borne inférieure → vitesse + step
-  - Au-dessus de la borne supérieure → vitesse − step
-  - Dans la bande morte → aucun changement
-- **Protection données périmées** : si l'entité puissance réseau n'a pas changé depuis plus de 60 s, la régulation est suspendue
-- **Persistance complète** : mode, setpoint, bande morte et pas survivent aux redémarrages
-- **Paramètres ajustables depuis l'UI** (entités `number`, saisie directe) :
-  - Setpoint (W) — défaut : 0 W
-  - Borne inférieure bande morte (W) — défaut : 0 W
-  - Borne supérieure bande morte (W) — défaut : 100 W
-  - Pas max montée (RPM) — défaut : 300 RPM
-  - Pas max descente (RPM) — défaut : 30 RPM
-  - Vitesse min solaire (RPM) — défaut : 1400 RPM
-  - Vitesse max solaire (RPM) — défaut : 3000 RPM
+  - `step = min(step_max, max(10, int(error)))` — proportional to the delta, capped
+  - Below the lower bound → speed up
+  - Above the upper bound → speed down
+  - Inside the dead band → no change
+- **Stale-data protection**: if the grid-power entity has not changed for more than 60 s, regulation is suspended
+- **Full persistence**: mode, setpoint, dead band and steps survive restarts
+- **UI-adjustable parameters** (`number` entities, direct input):
+  - Setpoint (W) — default: 0 W
+  - Dead-band lower bound (W) — default: 0 W
+  - Dead-band upper bound (W) — default: 100 W
+  - Max step up (RPM) — default: 300 RPM
+  - Max step down (RPM) — default: 30 RPM
+  - Min solar speed (RPM) — default: 1400 RPM
+  - Max solar speed (RPM) — default: 3000 RPM
 
-### Améliorations techniques
-- `entry.runtime_data` remplace `hass.data[DOMAIN]`
-- `PumpBaseEntity` : classe de base partagée (`DeviceInfo`, `available`, `has_entity_name`)
-- `PARALLEL_UPDATES = 1` sur toutes les plateformes
-- `UpdateFailed` quand la pompe ne répond plus (entités → `unavailable`, récupération automatique au poll suivant)
-- `async_config_entry_first_refresh` au démarrage
-- Options flow : les clés persistées (mode, paramètres solaires) sont préservées lors d'une mise à jour des options
-- Timeout HTTP appliqué à chaque requête (session partagée HA)
-- `ConfigEntryNotReady` dans `_async_setup` pour retry automatique si pompe offline au boot
-- Énergie accumulée uniquement si `RunningStatus == 1`
-- `NumberMode.BOX` sur tous les paramètres de saisie (pas de slider)
-- `restore_energy()` méthode publique sur le coordinator
+### Technical improvements
+- `entry.runtime_data` replaces `hass.data[DOMAIN]`
+- `PumpBaseEntity`: shared base class (`DeviceInfo`, `available`, `has_entity_name`)
+- `PARALLEL_UPDATES = 1` on all platforms
+- `UpdateFailed` when the pump stops responding (entities → `unavailable`, automatic recovery on the next poll)
+- `async_config_entry_first_refresh` at startup
+- Options flow: persisted keys (mode, solar parameters) are preserved when updating options
+- HTTP timeout applied to every request (shared HA session)
+- `ConfigEntryNotReady` in `_async_setup` for automatic retry if the pump is offline at boot
+- Energy accumulated only when `RunningStatus == 1`
+- `NumberMode.BOX` on all input parameters (no slider)
+- `restore_energy()` public method on the coordinator
 
-### Bugs corrigés
-- `api.py` : timeout ignoré sur la session partagée HA → passé à chaque requête
-- `coordinator.py` : `UpdateFailed` → `ConfigEntryNotReady` dans `_async_setup`
-- `coordinator.py` : énergie accumulée avant le check `running` → corrigé
-- `coordinator.py` : `switch_entity=""` falsy retombait sur `entry.data` → clé-existence check
-- `coordinator.py` : réponse vide ne levait pas d'erreur → `UpdateFailed`
-- `switch.py` : pas de refresh après `turn_on` / `turn_off`
-- Options flow : sauvegarde écrasait le mode de contrôle persisté
-- Priming : déclenchement parasite à chaque rechargement de configuration
-- Imports absolus → imports relatifs
-- Logs f-strings → format `%s`
+### Bug fixes
+- `api.py`: timeout ignored on the shared HA session → now passed on every request
+- `coordinator.py`: `UpdateFailed` → `ConfigEntryNotReady` in `_async_setup`
+- `coordinator.py`: energy accumulated before the `running` check → fixed
+- `coordinator.py`: a falsy `switch_entity=""` fell back to `entry.data` → key-existence check
+- `coordinator.py`: an empty response did not raise an error → `UpdateFailed`
+- `switch.py`: no refresh after `turn_on` / `turn_off`
+- Options flow: saving overwrote the persisted control mode
+- Priming: spurious trigger on every configuration reload
+- Absolute imports → relative imports
+- f-string logs → `%s` format
 
 ---
 
 ## [1.0.0] — 2025-04-14
 
-- Commit initial : surveillance et contrôle de la pompe Emaux SPV150
-- Entités : `CurrentWatts`, `CurrentGPM` (sensors), `CurrentSpeed`, `SpeedSelected` (numbers), `RunningStatus` (switch)
-- Polling toutes les 5 secondes via HTTP CGI
-- Support d'une entité switch externe pour couper le polling
+- Initial commit: monitoring and control of the Emaux SPV150 pump
+- Entities: `CurrentWatts`, `CurrentGPM` (sensors), `CurrentSpeed`, `SpeedSelected` (numbers), `RunningStatus` (switch)
+- Polling every 5 seconds via HTTP CGI
+- Support for an external switch entity to pause polling
 - Config flow UI
-- Compatible HACS
+- HACS-compatible

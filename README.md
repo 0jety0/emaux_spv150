@@ -1,115 +1,119 @@
-# emaux_spv150 pour Home Assistant
+# emaux_spv150 for Home Assistant
 
-![downloads](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=utilisateurs%20HACS&suffix=%20installations&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.emaux_spv150.total)
+![downloads](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=HACS%20users&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.emaux_spv150.total)
 ![version](https://img.shields.io/badge/version-2.1.0-blue)
 
-Intégration personnalisée Home Assistant pour contrôler et surveiller la pompe de piscine à vitesse variable **Emaux SPV150**.
+Custom Home Assistant integration to control and monitor the **Emaux SPV150** variable-speed pool pump.
 
 ![image info](/img/main.jpeg)
 
-## Fonctionnalités v2.0.0
+## Features
 
-### Supervision
-- Puissance consommée (W) et débit (GPM) en temps réel
-- Énergie cumulée (kWh) — compatible dashboard Énergie HA
-- Temps de fonctionnement depuis le dernier démarrage
+### Monitoring
+- Power draw (W) and flow rate (GPM) in real time
+- Cumulated energy (kWh) — compatible with the HA Energy dashboard
+- Uptime since the last start
 
-### Contrôle
-- Vitesse courante (RPM) et preset de vitesse (1/2/3) modifiables depuis l'UI
-- Throttle configurable entre changements de vitesse (défaut : 60 s) pour protéger la pompe
-- Séquence de démarrage : attente automatique de la fin du priming (défaut : 120 s, conforme manuel SPV150 section 5) uniquement lors d'une mise sous tension physique (switch OFF→ON)
+### Control
+- Current speed (RPM) and speed preset (1/2/3) adjustable from the UI
+- Configurable throttle between speed changes (default: 60 s) to protect the pump
+- Configurable request timeout and polling interval, both adjustable at runtime, so the pump's CGI server is not overloaded
+- Startup sequence: automatically waits for priming to finish (default: 120 s, per SPV150 manual section 5) only on a physical power-on (switch OFF→ON)
 
-### Mode solaire — régulateur P avec bande morte
-- Sélecteur de mode : `Off` / `Manuel` / `Solaire` — **persisté entre les redémarrages**
-- Entité puissance réseau configurable (n'importe quelle entité HA, ex: `sensor.puissance_reseau`)
-- **Régulateur proportionnel (P)** centré sur un setpoint configurable :
-  - `error = |puissance_réseau - setpoint|`
-  - `step = min(step_max, max(10W, error))` — proportionnel au delta, plafonné
-  - En-dessous de la borne inférieure de la bande morte → vitesse + step
-  - Au-dessus de la borne supérieure → vitesse − step
-  - Dans la bande morte → aucune action
-- Régulation active immédiatement si la pompe tourne déjà lors du passage en mode solaire
-- Protection données périmées : si la valeur réseau n'a pas changé depuis plus de 60 s, la régulation est suspendue
-- Tous les paramètres (setpoint, bande morte, pas, mode, vitesses min/max) **persistés entre les redémarrages**
+### Solar mode — P-controller with dead band
+- Mode selector: `Off` / `Manual` / `Solar` — **persisted across restarts**
+- Configurable grid-power entity (any HA entity, e.g. `sensor.grid_power`)
+- **Proportional (P) controller** centred on a configurable setpoint:
+  - `error = |grid_power - setpoint|`
+  - `step = min(step_max, max(10 W, error))` — proportional to the delta, capped
+  - Below the lower dead-band bound → speed up
+  - Above the upper bound → speed down
+  - Inside the dead band → no action
+- Regulation is active immediately if the pump is already running when switching to solar mode
+- Stale-data protection: if the grid value has not changed for more than 60 s, regulation is suspended
+- All parameters (setpoint, dead band, steps, mode, min/max speeds) **persisted across restarts**
 
 ## Installation
 
-### Via HACS (recommandé)
+### Via HACS (recommended)
 
-1. Assurez-vous que [HACS](https://hacs.xyz/) est installé.
-2. Dans HACS, allez dans **Intégrations**.
-3. Cliquez sur les trois points (⋮) > **Dépôts personnalisés**.
-4. Ajoutez l'URL de ce dépôt et sélectionnez **Intégration**.
-5. Installez `emaux_spv150` depuis HACS.
-6. Redémarrez Home Assistant.
+1. Make sure [HACS](https://hacs.xyz/) is installed.
+2. In HACS, go to **Integrations**.
+3. Click the three dots (⋮) > **Custom repositories**.
+4. Add this repository's URL and select **Integration**.
+5. Install `emaux_spv150` from HACS.
+6. Restart Home Assistant.
 
-### Installation manuelle
+### Manual installation
 
-1. Copiez le dossier `custom_components/emaux_spv150` dans `config/custom_components/` de votre instance HA.
-2. Redémarrez Home Assistant.
+1. Copy the `custom_components/emaux_spv150` folder into your HA instance's `config/custom_components/`.
+2. Restart Home Assistant.
 
-## Configuration initiale
+## Initial setup
 
-1. **Paramètres > Appareils & Services > Ajouter une intégration**
-2. Recherchez `emaux_spv150`
-3. Saisissez l'adresse IP de la pompe
-4. (optionnel) Sélectionnez un switch externe pour couper le polling quand la pompe est hors tension
+1. **Settings > Devices & Services > Add integration**
+2. Search for `emaux_spv150`
+3. Enter the pump's IP address
+4. (optional) Select an external switch to pause polling when the pump is powered off
 
-La pompe est testée (ping HTTP) avant validation. Il est impossible d'ajouter deux fois la même IP.
+The pump is tested (HTTP ping) before validation. The same IP cannot be added twice.
 
-## Options configurables
+## Configurable options
 
-Accessibles via **Paramètres > Appareils & Services > Emaux SPV150 > Configurer** :
+Available via **Settings > Devices & Services > Emaux SPV150 > Configure**:
 
-| Paramètre | Description | Défaut |
-|-----------|-------------|--------|
-| Adresse IP | IP de la pompe | — |
-| Switch externe | Entité pour couper le polling | — |
-| Intervalle de polling | 5 / 15 / 30 / 60 secondes | 30 s |
-| Entité puissance réseau | Capteur HA pour le mode solaire | — |
-| Setpoint (W) | Puissance réseau cible du régulateur P | 0 W |
-| Borne inférieure bande morte (W) | En-dessous : accélérer | 0 W |
-| Borne supérieure bande morte (W) | Au-dessus : ralentir | 100 W |
-| Pas max montée (RPM) | Plafond du step proportionnel en montée | 300 RPM |
-| Pas max descente (RPM) | Plafond du step proportionnel en descente | 30 RPM |
-| Délai priming (s) | Attente après mise sous tension avant régulation solaire | 120 s |
-| Intervalle changement de vitesse (s) | Throttle entre deux commandes SetSpeed (0 = désactivé) | 60 s |
+| Option | Description | Default |
+|--------|-------------|---------|
+| IP address | Pump IP | — |
+| External switch | Entity used to pause polling | — |
+| Polling interval | 5–60 seconds | 30 s |
+| Request timeout | HTTP timeout per pump request (1–30 s) | 5 s |
+| Grid-power entity | HA sensor for solar mode | — |
+| Setpoint (W) | Target grid power for the P-controller | 0 W |
+| Dead-band lower bound (W) | Below this: speed up | 0 W |
+| Dead-band upper bound (W) | Above this: slow down | 100 W |
+| Max step up (RPM) | Cap on the proportional step when speeding up | 300 RPM |
+| Max step down (RPM) | Cap on the proportional step when slowing down | 30 RPM |
+| Priming delay (s) | Wait after power-on before solar regulation | 120 s |
+| Speed-change interval (s) | Throttle between two SetSpeed commands (0 = disabled) | 60 s |
 
-## Entités créées
+## Created entities
 
-| Entité | Type | Description |
+| Entity | Type | Description |
 |--------|------|-------------|
-| `sensor.power` | Sensor | Puissance consommée (W) |
-| `sensor.flow_rate` | Sensor | Débit (GPM) |
-| `sensor.energy` | Sensor | Énergie cumulée (kWh) |
-| `sensor.uptime` | Sensor | Temps de fonctionnement (h) |
-| `number.speed` | Number | Vitesse courante (RPM) — slider |
-| `number.speed_preset` | Number | Preset de vitesse (1/2/3) — slider |
-| `number.setpoint` | Number | Setpoint du régulateur (W) |
-| `number.dead_band_lower` | Number | Borne inférieure bande morte (W) |
-| `number.dead_band_upper` | Number | Borne supérieure bande morte (W) |
-| `number.step_up` | Number | Pas max montée (RPM) |
-| `number.step_down` | Number | Pas max descente (RPM) |
-| `number.rpm_min_solar` | Number | Vitesse min en mode solaire (RPM) |
-| `number.rpm_max_solar` | Number | Vitesse max en mode solaire (RPM) |
-| `switch.running` | Switch | Démarrer / arrêter la pompe |
-| `select.control_mode` | Select | Off / Manuel / Solaire |
+| `sensor.power` | Sensor | Power draw (W) |
+| `sensor.flow_rate` | Sensor | Flow rate (GPM) |
+| `sensor.energy` | Sensor | Cumulated energy (kWh) |
+| `sensor.uptime` | Sensor | Uptime (h) |
+| `number.speed` | Number | Current speed (RPM) — slider |
+| `number.speed_preset` | Number | Speed preset (1/2/3) — slider |
+| `number.setpoint` | Number | Controller setpoint (W) |
+| `number.dead_band_lower` | Number | Dead-band lower bound (W) |
+| `number.dead_band_upper` | Number | Dead-band upper bound (W) |
+| `number.step_up` | Number | Max step up (RPM) |
+| `number.step_down` | Number | Max step down (RPM) |
+| `number.rpm_min_solar` | Number | Min speed in solar mode (RPM) |
+| `number.rpm_max_solar` | Number | Max speed in solar mode (RPM) |
+| `number.poll_interval` | Number | Polling interval (s) |
+| `number.request_timeout` | Number | HTTP request timeout (s) |
+| `switch.running` | Switch | Start / stop the pump |
+| `select.control_mode` | Select | Off / Manual / Solar |
 
 ![image info](/img/page_web.jpeg)
 
-## Développement
+## Development
 
-Outils : [uv](https://docs.astral.sh/uv/) (environnement & dépendances) et [ruff](https://docs.astral.sh/ruff/) (lint + format).
+Tooling: [uv](https://docs.astral.sh/uv/) (environment & dependencies) and [ruff](https://docs.astral.sh/ruff/) (lint + format).
 
 ```bash
-uv sync                 # venv + dépendances de dev (depuis uv.lock)
+uv sync                 # venv + dev dependencies (from uv.lock)
 uv run ruff check .     # lint
 uv run ruff format .    # format
 uv run pytest -q        # tests
 ```
 
-La CI (GitHub Actions) lance `ruff check`, `ruff format --check` et `pytest`, en plus de `hassfest` et de la validation HACS.
+CI (GitHub Actions) runs `ruff check`, `ruff format --check` and `pytest`, in addition to `hassfest` and HACS validation.
 
-## Licence
+## License
 
-[PolyForm Noncommercial 1.0.0](LICENSE) — usage personnel/non commercial. Tout usage commercial nécessite un accord séparé.
+[PolyForm Noncommercial 1.0.0](LICENSE) — personal / non-commercial use. Any commercial use requires a separate agreement.
