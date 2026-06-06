@@ -1,41 +1,67 @@
-from homeassistant.components.sensor import RestoreSensor, SensorDeviceClass, SensorEntity, SensorStateClass
-from homeassistant.const import UnitOfEnergy, UnitOfPower, UnitOfTime, UnitOfVolumeFlowRate
+import logging
+from collections.abc import Callable
+from dataclasses import dataclass
+
+from homeassistant.components.sensor import (
+    RestoreSensor,
+    SensorDeviceClass,
+    SensorEntity,
+    SensorEntityDescription,
+    SensorStateClass,
+)
+from homeassistant.const import (
+    UnitOfEnergy,
+    UnitOfPower,
+    UnitOfTime,
+    UnitOfVolumeFlowRate,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import PumpConfigEntry, PumpCoordinator
 from .entity import PumpBaseEntity
-from .utils import camel_to_snake
+
+_LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 1
 
-SENSOR_ENTITY_CONFIG = [
-    {
-        "name": "CurrentWatts",
-        "translation_key": "current_watts",
-        "unit": UnitOfPower.WATT,
-        "device_class": SensorDeviceClass.POWER,
-        "state_class": SensorStateClass.MEASUREMENT,
-        "icon": "mdi:flash",
-    },
-    {
-        "name": "CurrentGPM",
-        "translation_key": "current_gpm",
-        "unit": UnitOfVolumeFlowRate.GALLONS_PER_MINUTE,
-        "device_class": SensorDeviceClass.VOLUME_FLOW_RATE,
-        "state_class": SensorStateClass.MEASUREMENT,
-        "icon": "mdi:water-pump",
-    },
-    {
-        "name": "UptimeHours",
-        "translation_key": "uptime_hours",
-        "unit": UnitOfTime.HOURS,
-        "device_class": SensorDeviceClass.DURATION,
-        "state_class": SensorStateClass.MEASUREMENT,
-        "icon": "mdi:clock-start",
-        "source": "coordinator",
-    },
-]
+
+@dataclass(frozen=True, kw_only=True)
+class PumpSensorDescription(SensorEntityDescription):
+    """Describes an Emaux SPV150 sensor entity."""
+
+    value_fn: Callable[[PumpCoordinator], float | None]
+
+
+SENSOR_DESCRIPTIONS: tuple[PumpSensorDescription, ...] = (
+    PumpSensorDescription(
+        key="current_watts",
+        translation_key="current_watts",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:flash",
+        value_fn=lambda c: c.data.current_watts,
+    ),
+    PumpSensorDescription(
+        key="current_gpm",
+        translation_key="current_gpm",
+        native_unit_of_measurement=UnitOfVolumeFlowRate.GALLONS_PER_MINUTE,
+        device_class=SensorDeviceClass.VOLUME_FLOW_RATE,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:water-pump",
+        value_fn=lambda c: c.data.current_gpm,
+    ),
+    PumpSensorDescription(
+        key="uptime_hours",
+        translation_key="uptime_hours",
+        native_unit_of_measurement=UnitOfTime.HOURS,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:clock-start",
+        value_fn=lambda c: c.uptime_hours,
+    ),
+)
 
 
 async def async_setup_entry(
@@ -43,7 +69,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up Emaux SPV150 sensor entities."""
     coordinator: PumpCoordinator = entry.runtime_data
-    entities: list[SensorEntity] = [PumpSensor(coordinator, config) for config in SENSOR_ENTITY_CONFIG]
+    entities: list[SensorEntity] = [PumpSensor(coordinator, description) for description in SENSOR_DESCRIPTIONS]
     entities.append(PumpEnergySensor(coordinator))
     async_add_entities(entities, update_before_add=True)
 
@@ -51,29 +77,17 @@ async def async_setup_entry(
 class PumpSensor(PumpBaseEntity, SensorEntity):
     """Sensor entity for a numeric pump measurement."""
 
-    def __init__(self, coordinator: PumpCoordinator, config: dict) -> None:
+    entity_description: PumpSensorDescription
+
+    def __init__(self, coordinator: PumpCoordinator, description: PumpSensorDescription) -> None:
         super().__init__(coordinator)
-        self._key: str = config["name"]
-        self._source: str | None = config.get("source")
-        self._attr_translation_key = config["translation_key"]
-        self._attr_unique_id = "spv150_" + camel_to_snake(self._key)
-        self._attr_native_unit_of_measurement = config["unit"]
-        self._attr_device_class = config["device_class"]
-        self._attr_state_class = config["state_class"]
-        self._attr_icon = config["icon"]
+        self.entity_description = description
+        self._attr_unique_id = f"spv150_{description.key}"
 
     @property
     def native_value(self) -> float | None:
-        """Return the current sensor value from coordinator data or coordinator attributes."""
-        if self._source == "coordinator":
-            return self.coordinator.uptime_hours if self._key == "UptimeHours" else None
-        raw = self.coordinator.data.get(self._key)
-        if raw is None:
-            return None
-        try:
-            return float(raw)
-        except (ValueError, TypeError):
-            return None
+        """Return the current sensor value via the description's value_fn."""
+        return self.entity_description.value_fn(self.coordinator)
 
 
 class PumpEnergySensor(PumpBaseEntity, RestoreSensor):
@@ -97,7 +111,7 @@ class PumpEnergySensor(PumpBaseEntity, RestoreSensor):
             try:
                 self.coordinator.restore_energy(float(last.native_value))
             except (ValueError, TypeError):
-                pass
+                _LOGGER.warning("Could not restore energy value: %s", last.native_value)
 
     @property
     def native_value(self) -> float | None:

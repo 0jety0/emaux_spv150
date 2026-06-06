@@ -181,3 +181,14 @@ CLAUDE.md
 
 # PyPI configuration file
 .pypirc
+
+# Editors / OS junk
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Backups / local artifacts (never published)
+*.bak
+*.bak-*

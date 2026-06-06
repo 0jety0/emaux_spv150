@@ -19,7 +19,8 @@
       }
     },
     "error": {
-      "cannot_connect": "Cannot connect to the pump. Check the IP address and network."
+      "cannot_connect": "Cannot connect to the pump. Check the IP address and network.",
+      "invalid_host": "Invalid IP address or hostname."
     },
     "abort": {
       "already_configured": "This pump is already configured.",
@@ -33,7 +34,6 @@
         "data": {
           "host": "Pump IP address",
           "switch_entity": "External power switch entity (optional)",
-          "poll_interval": "Polling interval (seconds)",
           "grid_power_entity": "Grid power sensor entity (any entity_id)",
           "setpoint": "Setpoint (W) — target grid power for the P-controller",
           "dead_band_lower": "Dead band lower bound (W) — below this: speed up",
@@ -47,6 +47,7 @@
     },
     "error": {
       "cannot_connect": "Cannot connect to the pump. Check the IP address and network.",
+      "invalid_host": "Invalid IP address or hostname.",
       "dead_band_range_invalid": "Dead band upper bound must be greater than or equal to lower bound."
     }
   },
@@ -66,7 +67,9 @@
       "step_up": { "name": "Max speed increase step" },
       "step_down": { "name": "Max speed decrease step" },
       "rpm_min_solar": { "name": "Min speed (solar)" },
-      "rpm_max_solar": { "name": "Max speed (solar)" }
+      "rpm_max_solar": { "name": "Max speed (solar)" },
+      "poll_interval": { "name": "Polling interval" },
+      "request_timeout": { "name": "Request timeout" }
     },
     "switch": {
       "running_status": { "name": "Running" }

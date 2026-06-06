@@ -16,6 +16,7 @@ CONF_RPM_MIN_SOLAR = "rpm_min_solar"
 CONF_RPM_MAX_SOLAR = "rpm_max_solar"
 CONF_PRIMING_TIME = "priming_time"
 CONF_SPEED_CHANGE_INTERVAL = "speed_change_interval"
+CONF_REQUEST_TIMEOUT = "request_timeout"
 
 DEFAULT_POLL_INTERVAL = 30
 DEFAULT_SETPOINT = 0.0
@@ -27,5 +28,10 @@ DEFAULT_RPM_MIN_SOLAR = 1400
 DEFAULT_RPM_MAX_SOLAR = 3000
 DEFAULT_PRIMING_TIME = 120
 DEFAULT_SPEED_CHANGE_INTERVAL = 60
+DEFAULT_REQUEST_TIMEOUT = 5
 
 COMMAND_SETTLE_DELAY = 2
+
+# Solar regulation is suspended when the grid-power entity has not changed for
+# longer than this, to avoid acting on stale readings.
+GRID_POWER_STALENESS_SECONDS = 60
