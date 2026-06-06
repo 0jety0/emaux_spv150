@@ -1,7 +1,14 @@
 # emaux_spv150 for Home Assistant
 
-![downloads](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=HACS%20users&suffix=%20installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.emaux_spv150.total)
-![version](https://img.shields.io/badge/version-2.1.0-blue)
+**English** | [Français](./README.fr.md)
+
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
+[![Release](https://img.shields.io/github/v/release/0jety0/emaux_spv150?color=blue)](https://github.com/0jety0/emaux_spv150/releases)
+[![HACS installs](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.emaux_spv150.total)](https://analytics.home-assistant.io/custom_integrations)
+[![CI](https://github.com/0jety0/emaux_spv150/actions/workflows/ci.yaml/badge.svg)](https://github.com/0jety0/emaux_spv150/actions/workflows/ci.yaml)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Stars](https://img.shields.io/github/stars/0jety0/emaux_spv150?style=flat&logo=github)](https://github.com/0jety0/emaux_spv150/stargazers)
+[![License: PolyForm NC](https://img.shields.io/badge/license-PolyForm%20NC%201.0.0-orange.svg)](LICENSE)
 
 Custom Home Assistant integration to control and monitor the **Emaux SPV150** variable-speed pool pump.
 
