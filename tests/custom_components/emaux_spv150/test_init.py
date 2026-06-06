@@ -2,7 +2,6 @@ import pytest
 from homeassistant.core import HomeAssistant
 
 from custom_components.emaux_spv150.coordinator import PumpCoordinator
-from custom_components.emaux_spv150.const import DOMAIN
 
 
 @pytest.mark.asyncio

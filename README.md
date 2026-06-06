@@ -1,7 +1,7 @@
 # emaux_spv150 pour Home Assistant
 
 ![downloads](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=utilisateurs%20HACS&suffix=%20installations&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.emaux_spv150.total)
-![version](https://img.shields.io/badge/version-2.0.0-blue)
+![version](https://img.shields.io/badge/version-2.1.0-blue)
 
 Intégration personnalisée Home Assistant pour contrôler et surveiller la pompe de piscine à vitesse variable **Emaux SPV150**.
 
@@ -96,3 +96,20 @@ Accessibles via **Paramètres > Appareils & Services > Emaux SPV150 > Configurer
 | `select.control_mode` | Select | Off / Manuel / Solaire |
 
 ![image info](/img/page_web.jpeg)
+
+## Développement
+
+Outils : [uv](https://docs.astral.sh/uv/) (environnement & dépendances) et [ruff](https://docs.astral.sh/ruff/) (lint + format).
+
+```bash
+uv sync                 # venv + dépendances de dev (depuis uv.lock)
+uv run ruff check .     # lint
+uv run ruff format .    # format
+uv run pytest -q        # tests
+```
+
+La CI (GitHub Actions) lance `ruff check`, `ruff format --check` et `pytest`, en plus de `hassfest` et de la validation HACS.
+
+## Licence
+
+[PolyForm Noncommercial 1.0.0](LICENSE) — usage personnel/non commercial. Tout usage commercial nécessite un accord séparé.

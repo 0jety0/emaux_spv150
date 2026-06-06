@@ -1,5 +1,52 @@
 # Changelog
 
+## [2.1.0] — 2026-06-06
+
+### Nouvelles fonctionnalités
+
+- **Timeout de requête configurable** : nouvelle entité `number` « Request timeout » (1–30 s, défaut 5 s), modifiable à chaud comme l'intervalle de polling. Le serveur CGI embarqué de la pompe étant lent/instable sur le LAN, le timeout passe de 2 s à 5 s par défaut pour réduire les faux `timed out`. Intervalle de polling et timeout sont tous deux ajustables depuis l'UI pour ne pas surcharger la pompe.
+
+### Outils & projet
+
+- **Migration vers `uv` + `ruff`** : `pyproject.toml` (PEP 621) remplace le `Pipfile` ; `ruff` (lint + format) remplace `black` + `isort` ; config `pytest` intégrée au `pyproject` (suppression de `pytest.ini`). `uv.lock` versionné. Outils de dev/CI uniquement — aucun impact sur le runtime HA.
+- **CI GitHub Actions** : `ruff check` + `ruff format --check` + `pytest` (via `uv`), en plus de `hassfest` et de la validation HACS.
+- **Licence** : [PolyForm Noncommercial 1.0.0](LICENSE) (usage personnel / non commercial).
+
+### Corrections de bugs
+
+- **`api.py` — JSON invalide** : `json.JSONDecodeError` est désormais capturé (réponse non-JSON, HTML d'erreur, corps vide) et renvoie `{}` au lieu de remonter une exception non gérée qui stoppait le polling.
+- **`api.py` — injection d'URL** : la clé de commande est encodée (`urllib.parse.quote`) avant d'être insérée dans l'URL ; la valeur est forcée en `int`.
+- **`api.py` — fuite d'information** : l'IP de la pompe n'apparaît plus dans les logs `ERROR` (déplacée en `DEBUG`).
+- **`coordinator.py` — reload intempestif** : ajuster un paramètre `number` local (setpoint, bande morte, pas, RPM, intervalle) ne recharge plus toute l'intégration. Le `update_listener` ne recharge que sur changement de connexion (IP / switch / entité réseau). L'énergie cumulée et l'uptime ne sont plus remis à zéro à chaque réglage.
+- **`coordinator.py` / `number.py` — invariants solaires** : `rpm_min_solar` ≤ `rpm_max_solar` **et** `dead_band_lower` ≤ `dead_band_upper` sont garantis ; les setters bornent automatiquement la valeur (avant, seul le config flow validait la bande morte).
+- **`__init__.py` — listener de reload sans course** : la décision de recharger compare les réglages de connexion (IP / switch / entité réseau) au lieu d'un drapeau, supprimant une fenêtre de course ; un réglage modifié via le formulaire d'options s'applique désormais à chaud (sans reload).
+- **`config_flow.py` — perte de `grid_power_entity`** : le formulaire d'options retombe sur `entry.data` (comme le switch), évitant d'effacer l'entité réseau lors d'une édition d'options.
+- **`sensor.py`** : échec de restauration de l'énergie loggé (`warning`) au lieu d'être avalé silencieusement.
+- **`RunningStatus`** : normalisé via `str()`, la détection marche que la pompe renvoie `"1"` ou `1`.
+- **Options flow** : un `switch_entity`/`grid_power_entity` valant `None` ne casse plus le formulaire d'options.
+
+### Améliorations techniques
+
+- **DTO `PumpStatus`** (`models.py`) : les données pompe sont converties une seule fois en objet typé ; fin des `float(...)` / comparaisons de chaînes dispersés dans les entités.
+- **`SolarRegulator` + `SolarControllerConfig`** (`solar.py`) : le régulateur P est extrait du coordinator en unité pure et testable (SRP).
+- **`NumberEntityDescription` / `SensorEntityDescription`** : les entités `number` et `sensor` utilisent le pattern idiomatique HA (dataclass) ; les trois structures parallèles de `number.py` sont fusionnées en une seule source de vérité (DRY).
+- **Constante `GRID_POWER_STALENESS_SECONDS`** : le seuil de péremption de l'entité réseau n'est plus un magic number.
+- **`config_flow.py`** : validation du format IP / hostname (`invalid_host`) avant le test de connexion, sur les trois flux (initial, reconfigure, options).
+- **`coordinator` typé** `DataUpdateCoordinator[PumpStatus]`.
+- Suppression de `utils.py` (devenu inutile).
+- **Tests** : 38 tests pytest (régulateur solaire, API + cas d'erreur, énergie/uptime, reconfigure, invariants RPM, normalisation `RunningStatus`). Le test orphelin `enable_maintenance` a été retiré.
+- `Pipfile` : suppression de `re` (module stdlib, pas un paquet) et `pydantic` (inutilisé) ; dépendances de test explicites.
+
+---
+
+## [2.0.1] — 2026-05-02
+
+### Bug fixes
+
+- **Entities grayed out when pump is powered off**: when the external switch turns OFF, entities now become `unavailable` (grayed out) instead of showing zero values with an orange warning icon. A new `pump_switch_off` flag on the coordinator is checked in the `available` property of all entities.
+
+---
+
 ## [2.0.0] — 2026-04-17
 
 ### Nouvelles fonctionnalités

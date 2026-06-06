@@ -7,7 +7,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import COMMAND_SETTLE_DELAY
 from .coordinator import PumpConfigEntry, PumpCoordinator
 from .entity import PumpBaseEntity
-from .utils import camel_to_snake
 
 PARALLEL_UPDATES = 1
 
@@ -23,18 +22,18 @@ async def async_setup_entry(
 class RunStopSwitchEntity(PumpBaseEntity, SwitchEntity):
     """Switch entity to control the pump run/stop state."""
 
+    _attr_translation_key = "running_status"
+    _attr_icon = "mdi:power"
+
     def __init__(self, coordinator: PumpCoordinator) -> None:
         super().__init__(coordinator)
-        self._key = "RunningStatus"
         self._set_key = "RunStop"
-        self._attr_translation_key = "running_status"
-        self._attr_unique_id = "spv150_" + camel_to_snake(self._key)
-        self._attr_icon = "mdi:power"
+        self._attr_unique_id = "spv150_running_status"
 
     @property
     def is_on(self) -> bool:
         """Return True when the pump is running."""
-        return self.coordinator.data.get(self._key, "0") == "1"
+        return self.coordinator.data.running
 
     async def async_turn_on(self, **kwargs) -> None:
         """Start the pump."""

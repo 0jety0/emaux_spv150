@@ -21,5 +21,17 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload the integration when the user updates options."""
-    await hass.config_entries.async_reload(entry.entry_id)
+    """Reload only when connection settings change; otherwise apply options live.
+
+    Only host / switch / grid-power entity require a full reload. Regulation
+    parameters (setpoint, dead band, steps, RPM, poll interval, mode) are applied
+    live on the coordinator — whether they came from a number entity or the
+    options flow — so energy, uptime and the regulation state machine are not
+    reset on every adjustment. Comparing values (rather than a flag) makes this
+    race-free.
+    """
+    coordinator = entry.runtime_data
+    if coordinator.connection_settings_changed(entry):
+        await hass.config_entries.async_reload(entry.entry_id)
+    else:
+        coordinator.apply_options(entry)
