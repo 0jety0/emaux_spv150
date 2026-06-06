@@ -26,7 +26,12 @@ def _patch_api(return_value=MOCK_STATUS):
 @pytest.mark.asyncio
 async def test_user_step_success(hass: HomeAssistant):
     """A valid host that responds should create a config entry."""
-    with _patch_api():
+    # Patch async_setup_entry so creating the entry does not start the real
+    # coordinator (which would leave a lingering poll timer at teardown).
+    with (
+        _patch_api(),
+        patch("custom_components.emaux_spv150.async_setup_entry", return_value=True),
+    ):
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
         assert result["type"] == FlowResultType.FORM
 
@@ -34,6 +39,7 @@ async def test_user_step_success(hass: HomeAssistant):
             result["flow_id"],
             user_input={"host": MOCK_HOST},
         )
+        await hass.async_block_till_done()
 
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["data"]["host"] == MOCK_HOST
