@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.1.1] — 2026-08-05
+
+### Fixed
+
+- **Timeout log message**: the "request timed out" error log now reports the actually configured timeout (`self._timeout.total`) instead of the hard-coded `DEFAULT_TIMEOUT` constant. Previously, raising the timeout via the "Request timeout" entity still logged "timed out after 5s", which was misleading precisely when diagnosing slow-pump network issues.
+
 ## [2.1.0] — 2026-06-06
 
 ### Features

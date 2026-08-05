@@ -43,7 +43,7 @@ class PumpAPI:
             _LOGGER.debug("Failing URL: %s", url)
             return {}
         except TimeoutError:
-            _LOGGER.error("Pump request timed out after %ss", DEFAULT_TIMEOUT)
+            _LOGGER.error("Pump request timed out after %ss", self._timeout.total)
             _LOGGER.debug("Timed-out URL: %s", url)
             return {}
         except json.JSONDecodeError as err:
