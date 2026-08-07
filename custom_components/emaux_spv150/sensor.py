@@ -47,6 +47,7 @@ SENSOR_DESCRIPTIONS: tuple[PumpSensorDescription, ...] = (
         key="current_gpm",
         translation_key="current_gpm",
         native_unit_of_measurement=UnitOfVolumeFlowRate.GALLONS_PER_MINUTE,
+        suggested_unit_of_measurement=UnitOfVolumeFlowRate.LITERS_PER_MINUTE,
         device_class=SensorDeviceClass.VOLUME_FLOW_RATE,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:water-pump",
