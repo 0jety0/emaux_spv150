@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.1.2] — 2026-08-07
+
+### Changed
+
+- **Flow rate in L/min**: the flow sensor now declares `suggested_unit_of_measurement = L/min`, so Home Assistant converts the pump's native gal/min reading to litres per minute out of the box (metric-friendly). Existing installs can switch the unit from the entity settings.
+
 ## [2.1.1] — 2026-08-05
 
 ### Fixed
