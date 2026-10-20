@@ -4,7 +4,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from homeassistant.const import STATE_UNAVAILABLE
+from homeassistant.const import STATE_UNAVAILABLE, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
@@ -101,3 +101,16 @@ async def test_run_command_returns_at_once_and_refreshes_once_the_pump_settled(
 
     assert reads_right_after == reads_before
     assert mock_pump_api.get_status.await_count == reads_before + 1
+
+
+@pytest.mark.asyncio
+async def test_settings_and_diagnostics_are_categorised(hass: HomeAssistant, config_entry, mock_pump_api):
+    """Regulation settings are config entities and uptime is diagnostic; live pump values stay primary."""
+    config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    registry = er.async_get(hass)
+
+    assert registry.async_get(_entity_id(hass, "number", "setpoint")).entity_category is EntityCategory.CONFIG
+    assert registry.async_get(_entity_id(hass, "sensor", "uptime_hours")).entity_category is EntityCategory.DIAGNOSTIC
+    assert registry.async_get(_entity_id(hass, "number", "current_speed")).entity_category is None

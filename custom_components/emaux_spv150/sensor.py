@@ -10,6 +10,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import (
+    EntityCategory,
     UnitOfEnergy,
     UnitOfPower,
     UnitOfTime,
@@ -56,6 +57,7 @@ SENSOR_DESCRIPTIONS: tuple[PumpSensorDescription, ...] = (
     PumpSensorDescription(
         key="uptime_hours",
         translation_key="uptime_hours",
+        entity_category=EntityCategory.DIAGNOSTIC,
         native_unit_of_measurement=UnitOfTime.HOURS,
         device_class=SensorDeviceClass.DURATION,
         state_class=SensorStateClass.MEASUREMENT,

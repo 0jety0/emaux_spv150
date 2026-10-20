@@ -6,7 +6,7 @@ from homeassistant.components.number import (
     NumberEntityDescription,
     NumberMode,
 )
-from homeassistant.const import REVOLUTIONS_PER_MINUTE, UnitOfPower, UnitOfTime
+from homeassistant.const import REVOLUTIONS_PER_MINUTE, EntityCategory, UnitOfPower, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -59,6 +59,7 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
     PumpNumberDescription(
         key="setpoint",
         translation_key="setpoint",
+        entity_category=EntityCategory.CONFIG,
         native_min_value=-5000,
         native_max_value=5000,
         native_step=10,
@@ -71,6 +72,7 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
     PumpNumberDescription(
         key="dead_band_lower",
         translation_key="dead_band_lower",
+        entity_category=EntityCategory.CONFIG,
         native_min_value=-5000,
         native_max_value=5000,
         native_step=10,
@@ -83,6 +85,7 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
     PumpNumberDescription(
         key="dead_band_upper",
         translation_key="dead_band_upper",
+        entity_category=EntityCategory.CONFIG,
         native_min_value=-5000,
         native_max_value=5000,
         native_step=10,
@@ -95,6 +98,7 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
     PumpNumberDescription(
         key="step_up",
         translation_key="step_up",
+        entity_category=EntityCategory.CONFIG,
         native_min_value=10,
         native_max_value=1000,
         native_step=10,
@@ -107,6 +111,7 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
     PumpNumberDescription(
         key="step_down",
         translation_key="step_down",
+        entity_category=EntityCategory.CONFIG,
         native_min_value=10,
         native_max_value=500,
         native_step=10,
@@ -119,6 +124,7 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
     PumpNumberDescription(
         key="rpm_min_solar",
         translation_key="rpm_min_solar",
+        entity_category=EntityCategory.CONFIG,
         native_min_value=800,
         native_max_value=3400,
         native_step=10,
@@ -131,6 +137,7 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
     PumpNumberDescription(
         key="rpm_max_solar",
         translation_key="rpm_max_solar",
+        entity_category=EntityCategory.CONFIG,
         native_min_value=800,
         native_max_value=3400,
         native_step=10,
@@ -143,6 +150,7 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
     PumpNumberDescription(
         key="poll_interval",
         translation_key="poll_interval",
+        entity_category=EntityCategory.CONFIG,
         native_min_value=5,
         native_max_value=60,
         native_step=1,
@@ -155,6 +163,7 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
     PumpNumberDescription(
         key="request_timeout",
         translation_key="request_timeout",
+        entity_category=EntityCategory.CONFIG,
         native_min_value=1,
         native_max_value=30,
         native_step=1,
