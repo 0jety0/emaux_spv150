@@ -68,7 +68,7 @@ class EmauxSpv150ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            host = user_input[CONF_HOST]
+            host = user_input[CONF_HOST].strip()
             if not is_valid_host(host):
                 errors["base"] = "invalid_host"
             else:
@@ -105,7 +105,7 @@ class EmauxSpv150ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         entry = self._get_reconfigure_entry()
 
         if user_input is not None:
-            host = user_input[CONF_HOST]
+            host = user_input[CONF_HOST].strip()
             if not is_valid_host(host):
                 errors["base"] = "invalid_host"
             else:
@@ -160,6 +160,7 @@ class EmauxSpv150OptionsFlow(config_entries.OptionsFlow):
         data = self.config_entry.data
 
         if user_input is not None:
+            user_input = {**user_input, CONF_HOST: user_input.get(CONF_HOST, "").strip()}
             if not is_valid_host(user_input.get(CONF_HOST, "")):
                 errors["base"] = "invalid_host"
 

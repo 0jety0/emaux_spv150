@@ -262,3 +262,19 @@ async def test_reconfigure_does_not_use_deprecated_reload_helper(
         await hass.async_block_till_done()
 
     assert "should use it for scheduling a reload" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_user_step_strips_spaces_around_host(hass: HomeAssistant):
+    """A host pasted with surrounding spaces is stored clean (it is used in every request URL)."""
+    with (
+        _patch_api(),
+        patch("custom_components.emaux_spv150.async_setup_entry", return_value=True),
+    ):
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input={"host": "  192.168.1.50 "}
+        )
+        await hass.async_block_till_done()
+
+    assert result["data"]["host"] == MOCK_HOST
