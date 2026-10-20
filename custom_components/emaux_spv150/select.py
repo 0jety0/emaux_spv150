@@ -14,7 +14,7 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: PumpConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up Emaux SPV150 select entities."""
-    async_add_entities([ControlModeSelect(entry.runtime_data)], update_before_add=True)
+    async_add_entities([ControlModeSelect(entry.runtime_data)])
 
 
 class ControlModeSelect(PumpBaseEntity, SelectEntity):

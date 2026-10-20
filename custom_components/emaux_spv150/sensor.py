@@ -72,7 +72,7 @@ async def async_setup_entry(
     coordinator: PumpCoordinator = entry.runtime_data
     entities: list[SensorEntity] = [PumpSensor(coordinator, description) for description in SENSOR_DESCRIPTIONS]
     entities.append(PumpEnergySensor(coordinator))
-    async_add_entities(entities, update_before_add=True)
+    async_add_entities(entities)
 
 
 class PumpSensor(PumpBaseEntity, SensorEntity):

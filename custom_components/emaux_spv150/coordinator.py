@@ -5,7 +5,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, STATE_OFF
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
@@ -346,13 +346,6 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
     # -------------------------------------------------------------------------
     # DataUpdateCoordinator hooks
     # -------------------------------------------------------------------------
-
-    async def _async_setup(self) -> None:
-        """Verify pump is reachable before entities are set up, unless its power switch is OFF."""
-        if is_switch_off(self.hass, self.switch_entity_id):
-            return
-        if not await self.api_pump.get_status():
-            raise ConfigEntryNotReady("Cannot reach pump during setup")
 
     async def _async_update_data(self) -> PumpStatus:
         """Fetch latest pump data and apply solar regulation if active."""

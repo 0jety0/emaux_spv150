@@ -30,6 +30,17 @@ async def test_async_unload_entry(hass: HomeAssistant, config_entry, mock_pump_a
 
 
 @pytest.mark.asyncio
+async def test_setup_reads_the_pump_once(hass: HomeAssistant, config_entry, mock_pump_api):
+    """Setup needs a single status read: the slow pump CGI must not be hit several times."""
+    config_entry.add_to_hass(hass)
+
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert mock_pump_api.get_status.await_count == 1
+
+
+@pytest.mark.asyncio
 async def test_setup_skips_pump_when_switch_off(hass: HomeAssistant, config_entry_with_switch, mock_pump_api):
     """A powered-off pump must not block setup: the pump is not contacted at all."""
     hass.states.async_set("switch.pool_power", "off")

@@ -16,7 +16,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up the Emaux SPV150 switch entities."""
     coordinator: PumpCoordinator = entry.runtime_data
-    async_add_entities([RunStopSwitchEntity(coordinator)], update_before_add=True)
+    async_add_entities([RunStopSwitchEntity(coordinator)])
 
 
 class RunStopSwitchEntity(PumpBaseEntity, SwitchEntity):

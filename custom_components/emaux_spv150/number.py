@@ -174,10 +174,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up Emaux SPV150 number entities."""
     coordinator: PumpCoordinator = entry.runtime_data
-    async_add_entities(
-        [PumpNumber(coordinator, description) for description in NUMBER_DESCRIPTIONS],
-        update_before_add=True,
-    )
+    async_add_entities([PumpNumber(coordinator, description) for description in NUMBER_DESCRIPTIONS])
 
 
 class PumpNumber(PumpBaseEntity, NumberEntity):
