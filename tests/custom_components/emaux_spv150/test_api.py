@@ -84,3 +84,22 @@ async def test_set_key_url_is_encoded():
     # The raw "&" must be percent-encoded so it cannot inject extra params.
     assert "Weird&Key" not in called_url
     assert "Weird%26Key" in called_url
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("payload", ["[1, 2]", "null", '"busy"'])
+async def test_get_status_non_object_json_returns_empty(payload):
+    """Valid JSON that is not an object must be treated as no data, not crash the poll."""
+    api = PumpAPI("192.168.1.50", _session(payload))
+    assert await api.get_status() == {}
+
+
+@pytest.mark.asyncio
+async def test_get_status_undecodable_body_returns_empty():
+    """A body that is not valid text must be treated as no data, not crash the poll."""
+    response = _FakeResponse()
+    response.text = MagicMock(side_effect=UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte"))
+    session = MagicMock()
+    session.get = MagicMock(return_value=response)
+    api = PumpAPI("192.168.1.50", session)
+    assert await api.get_status() == {}

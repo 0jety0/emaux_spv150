@@ -36,8 +36,7 @@ class PumpAPI:
         try:
             async with self._session.get(url, timeout=self._timeout) as response:
                 response.raise_for_status()
-                data = await response.text()
-                return json.loads(data)
+                payload = json.loads(await response.text())
         except ClientError as err:
             _LOGGER.error("Pump request failed: %s", err)
             _LOGGER.debug("Failing URL: %s", url)
@@ -46,10 +45,15 @@ class PumpAPI:
             _LOGGER.error("Pump request timed out after %ss", self._timeout.total)
             _LOGGER.debug("Timed-out URL: %s", url)
             return {}
-        except json.JSONDecodeError as err:
-            _LOGGER.error("Pump returned invalid JSON: %s", err)
+        except (json.JSONDecodeError, UnicodeDecodeError) as err:
+            _LOGGER.error("Pump returned an unreadable response: %s", err)
             _LOGGER.debug("Offending URL: %s", url)
             return {}
+        if not isinstance(payload, dict):
+            _LOGGER.error("Pump returned JSON that is not an object: %s", type(payload).__name__)
+            _LOGGER.debug("Offending URL: %s", url)
+            return {}
+        return payload
 
     async def get_status(self) -> dict[str, Any]:
         """Fetch the current pump status."""
