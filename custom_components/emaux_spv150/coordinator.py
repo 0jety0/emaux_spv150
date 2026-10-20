@@ -358,11 +358,14 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
             self._priming_done = True
             self._last_speed_change_time = None
             self._prev_switch_on = False
+            self._last_energy_update = None
             return PumpStatus.zeroed()
 
         self.pump_switch_off = False
         raw = await self.api_pump.get_status()
         if not raw:
+            # Unknown power during the outage: restart energy integration on the next answer.
+            self._last_energy_update = None
             raise UpdateFailed("Pump did not respond or returned empty data")
 
         status = PumpStatus.from_raw(raw)

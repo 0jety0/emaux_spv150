@@ -166,6 +166,46 @@ async def test_energy_accumulation(hass: HomeAssistant, config_entry, mock_pump_
 
 
 @pytest.mark.asyncio
+async def test_energy_not_counted_while_switch_off(
+    hass: HomeAssistant, config_entry_with_switch, mock_pump_api, freezer
+):
+    """Hours spent with the power switch OFF must not be billed at the next running poll."""
+    hass.states.async_set("switch.pool_power", "on")
+    config_entry_with_switch.add_to_hass(hass)
+    coordinator = PumpCoordinator(hass, config_entry_with_switch)
+    mock_pump_api.get_status = AsyncMock(return_value={**MOCK_STATUS, "CurrentWatts": "1000"})
+
+    with patch.object(coordinator, "api_pump", mock_pump_api):
+        await coordinator._async_update_data()
+        hass.states.async_set("switch.pool_power", "off")
+        await coordinator._async_update_data()
+        freezer.tick(timedelta(hours=12))
+        hass.states.async_set("switch.pool_power", "on")
+        await coordinator._async_update_data()
+
+    assert coordinator.energy_kwh == 0.0
+
+
+@pytest.mark.asyncio
+async def test_energy_not_counted_across_failed_polls(hass: HomeAssistant, config_entry, mock_pump_api, freezer):
+    """A pump outage must not be billed at full power once it answers again."""
+    config_entry.add_to_hass(hass)
+    coordinator = PumpCoordinator(hass, config_entry)
+    mock_pump_api.get_status = AsyncMock(return_value={**MOCK_STATUS, "CurrentWatts": "1000"})
+
+    with patch.object(coordinator, "api_pump", mock_pump_api):
+        await coordinator._async_update_data()
+        mock_pump_api.get_status.return_value = {}
+        with pytest.raises(UpdateFailed):
+            await coordinator._async_update_data()
+        freezer.tick(timedelta(hours=12))
+        mock_pump_api.get_status.return_value = {**MOCK_STATUS, "CurrentWatts": "1000"}
+        await coordinator._async_update_data()
+
+    assert coordinator.energy_kwh == 0.0
+
+
+@pytest.mark.asyncio
 async def test_energy_restore(hass: HomeAssistant, config_entry):
     """restore_energy() should seed the cumulated value."""
     config_entry.add_to_hass(hass)
