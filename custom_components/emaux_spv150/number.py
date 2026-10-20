@@ -188,6 +188,11 @@ class PumpNumber(PumpBaseEntity, NumberEntity):
         self._attr_unique_id = f"spv150_{description.key}"
 
     @property
+    def available(self) -> bool:
+        """Local settings stay usable while the pump is off; pump-backed values follow the pump."""
+        return self.entity_description.set_key is None or super().available
+
+    @property
     def native_value(self) -> float | None:
         """Return the current value via the description's value_fn."""
         return self.entity_description.value_fn(self.coordinator)

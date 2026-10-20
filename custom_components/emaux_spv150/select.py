@@ -29,6 +29,11 @@ class ControlModeSelect(PumpBaseEntity, SelectEntity):
         self._attr_unique_id = "spv150_control_mode"
 
     @property
+    def available(self) -> bool:
+        """Always available: the mode is a local setting, usable while the pump is off."""
+        return True
+
+    @property
     def current_option(self) -> str:
         return self.coordinator.control_mode
 
