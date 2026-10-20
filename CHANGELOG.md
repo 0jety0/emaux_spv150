@@ -1,5 +1,30 @@
 # Changelog
 
+## [2.2.0] — 2026-10-20
+
+### Fixed
+
+- **Phantom energy**: the energy sensor no longer bills the whole downtime at the current power after a switch-off or a failed poll (12 h off at 1000 W used to add 12 kWh).
+- **Reconfigure ignored**: a host saved once through the options flow no longer shadows later reconfigurations; the unique ID now follows the host, and the form shows the values actually in use. Reconfigure no longer uses `async_update_reload_and_abort`, which stops working in Home Assistant 2026.12.
+- **Solar regulation**: a rejected speed command is logged and retried on the next poll instead of failing the whole poll; a failed command no longer arms the 60 s speed-change throttle.
+- **Steady grid power**: freshness is judged on `last_reported`, so a stable export reported with the same value no longer suspends regulation after 60 s.
+- **Local settings while the pump is off**: the control-mode select and the regulation numbers stay available (Home Assistant silently drops service calls on unavailable entities).
+- **Options shown at once**: values saved through the options flow appear immediately on the number entities.
+- **Clearing optional fields**: the external switch and grid entities can now be removed in the options and reconfigure flows.
+- **Robust responses**: JSON that is not an object, or an undecodable body, is treated as "no data" instead of crashing the poll.
+- **Host input**: spaces around the host are stripped.
+
+### Changed
+
+- **Faster commands**: run/stop and number commands no longer block the service call for 2 s; the pump is re-read once it has settled (debounced refresh).
+- **One read at setup** instead of three.
+- **Immediate reaction to the power switch**: the integration refreshes as soon as the external switch changes state.
+- **Entity categories**: regulation numbers are `config` entities and uptime is `diagnostic` (they leave auto-generated dashboards; manual dashboards are unaffected).
+
+### Tooling & project
+
+- CI actions and Python 3.14 pinned, `hassfest` workflow file name fixed, tests run against Home Assistant 2026.10.2, `mise.toml` tasks (`install`, `lint`, `fmt`, `test`), stale `requirements*.txt` / `Pipfile.lock` removed.
+
 ## [2.1.3] — 2026-10-20
 
 ### Fixed

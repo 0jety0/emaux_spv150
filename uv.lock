@@ -1701,7 +1701,7 @@ wheels = [
 
 [[package]]
 name = "emaux-spv150"
-version = "2.1.3"
+version = "2.2.0"
 source = { virtual = "." }
 
 [package.dev-dependencies]
