@@ -114,3 +114,19 @@ async def test_settings_and_diagnostics_are_categorised(hass: HomeAssistant, con
     assert registry.async_get(_entity_id(hass, "number", "setpoint")).entity_category is EntityCategory.CONFIG
     assert registry.async_get(_entity_id(hass, "sensor", "uptime_hours")).entity_category is EntityCategory.DIAGNOSTIC
     assert registry.async_get(_entity_id(hass, "number", "current_speed")).entity_category is None
+
+
+@pytest.mark.asyncio
+async def test_switch_flip_is_reflected_without_waiting_for_the_poll(
+    hass: HomeAssistant, config_entry_with_switch, mock_pump_api
+):
+    """Turning the power switch off must make the pump values unavailable at once, not after the next poll."""
+    hass.states.async_set("switch.pool_power", "on")
+    config_entry_with_switch.add_to_hass(hass)
+    await hass.config_entries.async_setup(config_entry_with_switch.entry_id)
+    await hass.async_block_till_done()
+
+    hass.states.async_set("switch.pool_power", "off")
+    await hass.async_block_till_done()
+
+    assert hass.states.get(_entity_id(hass, "number", "current_speed")).state == STATE_UNAVAILABLE

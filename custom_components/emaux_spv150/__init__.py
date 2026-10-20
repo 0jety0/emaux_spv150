@@ -1,5 +1,6 @@
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.event import async_track_state_change_event
 
 from .const import PLATFORMS
 from .coordinator import PumpConfigEntry, PumpCoordinator
@@ -12,6 +13,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: PumpConfigEntry) -> bool
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+    if coordinator.switch_entity_id:
+        entry.async_on_unload(
+            async_track_state_change_event(hass, coordinator.switch_entity_id, coordinator.async_on_switch_change)
+        )
     return True
 
 

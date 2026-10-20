@@ -4,7 +4,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, STATE_OFF
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.debounce import Debouncer
@@ -347,6 +347,14 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
             except HomeAssistantError as err:
                 # The status was read fine: keep it, the regulator retries on the next poll.
                 _LOGGER.warning("Solar regulation: speed change to %d rpm failed: %s", new_speed, err)
+
+    @callback
+    def async_on_switch_change(self, event: Event[EventStateChangedData]) -> None:
+        """Re-poll as soon as the power switch flips instead of waiting for the next poll."""
+        old, new = event.data["old_state"], event.data["new_state"]
+        if old is not None and new is not None and old.state == new.state:
+            return  # attribute-only update
+        self.config_entry.async_create_background_task(self.hass, self.async_refresh(), "emaux_spv150_switch_refresh")
 
     # -------------------------------------------------------------------------
     # DataUpdateCoordinator hooks
