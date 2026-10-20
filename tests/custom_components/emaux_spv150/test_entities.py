@@ -1,5 +1,7 @@
 """Platform behaviour, tested through Home Assistant services and states."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
@@ -55,3 +57,23 @@ async def test_pump_backed_values_are_unavailable_while_pump_is_off(
     await _setup_with_pump_powered_off(hass, config_entry_with_switch)
 
     assert hass.states.get(_entity_id(hass, "number", "current_speed")).state == STATE_UNAVAILABLE
+
+
+@pytest.mark.asyncio
+async def test_options_flow_change_shows_immediately(hass: HomeAssistant, config_entry, mock_pump_api):
+    """A setpoint saved through the options flow is displayed at once, not after the next poll."""
+    config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    with patch(
+        "custom_components.emaux_spv150.config_flow.PumpAPI",
+        return_value=AsyncMock(get_status=AsyncMock(return_value=mock_pump_api.get_status.return_value)),
+    ):
+        result = await hass.config_entries.options.async_init(config_entry.entry_id)
+        await hass.config_entries.options.async_configure(
+            result["flow_id"], user_input={"host": "192.168.1.50", "setpoint": 250}
+        )
+        await hass.async_block_till_done()
+
+    assert float(hass.states.get(_entity_id(hass, "number", "setpoint")).state) == 250

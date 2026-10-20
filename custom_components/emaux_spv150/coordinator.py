@@ -173,6 +173,7 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         self.update_interval = timedelta(seconds=poll)
         self.request_timeout = int(opts.get(CONF_REQUEST_TIMEOUT, self.request_timeout))
         self.api_pump.set_timeout(self.request_timeout)
+        self.async_update_listeners()
 
     def set_control_mode(self, mode: str) -> None:
         self.control_mode = mode
