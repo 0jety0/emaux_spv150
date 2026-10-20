@@ -1,11 +1,14 @@
 """Platform behaviour, tested through Home Assistant services and states."""
 
+from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.emaux_spv150.const import DOMAIN
 
@@ -77,3 +80,24 @@ async def test_options_flow_change_shows_immediately(hass: HomeAssistant, config
         await hass.async_block_till_done()
 
     assert float(hass.states.get(_entity_id(hass, "number", "setpoint")).state) == 250
+
+
+@pytest.mark.asyncio
+async def test_run_command_returns_at_once_and_refreshes_once_the_pump_settled(
+    hass: HomeAssistant, config_entry, mock_pump_api
+):
+    """A command must not block the service call; the status is re-read after the settle delay."""
+    config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    reads_before = mock_pump_api.get_status.await_count
+
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": _entity_id(hass, "switch", "running_status")}, blocking=True
+    )
+    reads_right_after = mock_pump_api.get_status.await_count
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=3))
+    await hass.async_block_till_done()
+
+    assert reads_right_after == reads_before
+    assert mock_pump_api.get_status.await_count == reads_before + 1

@@ -1,10 +1,7 @@
-import asyncio
-
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import COMMAND_SETTLE_DELAY
 from .coordinator import PumpConfigEntry, PumpCoordinator
 from .entity import PumpBaseEntity
 
@@ -38,11 +35,9 @@ class RunStopSwitchEntity(PumpBaseEntity, SwitchEntity):
     async def async_turn_on(self, **kwargs) -> None:
         """Start the pump."""
         await self.coordinator.async_set_pump_key(self._set_key, 1)
-        await asyncio.sleep(COMMAND_SETTLE_DELAY)
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs) -> None:
         """Stop the pump."""
         await self.coordinator.async_set_pump_key(self._set_key, 2)
-        await asyncio.sleep(COMMAND_SETTLE_DELAY)
         await self.coordinator.async_request_refresh()

@@ -7,11 +7,13 @@ from homeassistant.const import CONF_HOST, STATE_OFF
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
 from .api import PumpAPI
 from .const import (
+    COMMAND_SETTLE_DELAY,
     CONF_DEAD_BAND_LOWER,
     CONF_DEAD_BAND_UPPER,
     CONF_GRID_POWER_ENTITY,
@@ -119,6 +121,8 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
             name="PumpCoordinator",
             update_interval=timedelta(seconds=poll_interval),
             config_entry=entry,
+            # After a command, re-read the pump once it has settled, without blocking the service call.
+            request_refresh_debouncer=Debouncer(hass, _LOGGER, cooldown=COMMAND_SETTLE_DELAY, immediate=False),
         )
 
     # -------------------------------------------------------------------------
