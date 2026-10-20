@@ -314,6 +314,24 @@ async def test_failed_speed_command_does_not_arm_the_throttle(hass: HomeAssistan
 
 
 @pytest.mark.asyncio
+async def test_solar_regulation_acts_on_a_steady_but_fresh_grid_value(
+    hass: HomeAssistant, config_entry, mock_pump_api, freezer
+):
+    """A grid sensor re-reporting the same value is fresh: a steady export must still be regulated."""
+    config_entry.add_to_hass(hass)
+    coordinator = PumpCoordinator(hass, config_entry)
+    coordinator.grid_power_entity = "sensor.grid_power"
+    hass.states.async_set("sensor.grid_power", "-2000")
+    freezer.tick(timedelta(seconds=120))
+    hass.states.async_set("sensor.grid_power", "-2000")  # same value, reported again
+
+    with patch.object(coordinator, "api_pump", mock_pump_api):
+        await coordinator._apply_solar_regulation(1500)
+
+    mock_pump_api.set_key.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_solar_regulation_ignores_stale_grid(hass: HomeAssistant, config_entry, mock_pump_api):
     """Stale grid power (> staleness threshold) must not trigger a speed change."""
     config_entry.add_to_hass(hass)

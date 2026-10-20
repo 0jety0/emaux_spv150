@@ -316,11 +316,12 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         if grid_power is None:
             return
 
-        if grid_state.last_changed is not None:
-            stale_seconds = (dt_util.utcnow() - grid_state.last_changed).total_seconds()
+        # last_reported moves on every report, even with an unchanged value (last_changed does not).
+        if grid_state.last_reported is not None:
+            stale_seconds = (dt_util.utcnow() - grid_state.last_reported).total_seconds()
             if stale_seconds > GRID_POWER_STALENESS_SECONDS:
                 _LOGGER.warning(
-                    "Grid power entity '%s' unchanged for %.0fs — skipping solar regulation",
+                    "Grid power entity '%s' not reported for %.0fs — skipping solar regulation",
                     self.grid_power_entity,
                     stale_seconds,
                 )
