@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -277,6 +278,39 @@ async def test_solar_regulation_speeds_up_when_exporting(hass: HomeAssistant, co
 
     # error = 1000 - 200 = 800 → step = min(200, 800) = 200 → 1700
     mock_pump_api.set_key.assert_called_once_with("SetCurrentSpeed", 1700)
+
+
+@pytest.mark.asyncio
+async def test_failed_solar_command_keeps_the_poll_result(hass: HomeAssistant, config_entry, mock_pump_api):
+    """A rejected speed command must not throw away the status that was read successfully."""
+    config_entry.add_to_hass(hass)
+    coordinator = PumpCoordinator(hass, config_entry)
+    coordinator.control_mode = "solar"
+    coordinator.grid_power_entity = "sensor.grid_power"
+    hass.states.async_set("sensor.grid_power", "-2000")  # exporting: regulator speeds up
+    mock_pump_api.set_key = AsyncMock(side_effect=HomeAssistantError("pump refused"))
+
+    with patch.object(coordinator, "api_pump", mock_pump_api):
+        data = await coordinator._async_update_data()
+
+    assert data.current_speed == 1500.0
+    mock_pump_api.set_key.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_failed_speed_command_does_not_arm_the_throttle(hass: HomeAssistant, config_entry, mock_pump_api):
+    """A speed command that failed must not block the next one for the throttle interval."""
+    config_entry.add_to_hass(hass)
+    coordinator = PumpCoordinator(hass, config_entry)
+    coordinator.speed_change_interval = 60
+    mock_pump_api.set_key = AsyncMock(side_effect=[HomeAssistantError("pump refused"), "1800"])
+
+    with patch.object(coordinator, "api_pump", mock_pump_api):
+        with pytest.raises(HomeAssistantError):
+            await coordinator.async_set_pump_key("SetCurrentSpeed", 1500)
+        result = await coordinator.async_set_pump_key("SetCurrentSpeed", 1800)
+
+    assert result == "1800"
 
 
 @pytest.mark.asyncio

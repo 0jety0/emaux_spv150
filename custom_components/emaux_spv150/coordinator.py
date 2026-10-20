@@ -5,7 +5,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, STATE_OFF
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
@@ -245,8 +245,11 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
                         self.speed_change_interval - elapsed,
                     )
                     return None
-            self._last_speed_change_time = now
-        return await self.api_pump.set_key(key, value)
+        result = await self.api_pump.set_key(key, value)
+        if key == "SetCurrentSpeed":
+            # Armed only once the pump accepted the change, so a failure does not block the retry.
+            self._last_speed_change_time = dt_util.utcnow()
+        return result
 
     # -------------------------------------------------------------------------
     # Monitoring helpers
@@ -334,7 +337,11 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
                 current_speed,
                 new_speed,
             )
-            await self.async_set_pump_key("SetCurrentSpeed", new_speed)
+            try:
+                await self.async_set_pump_key("SetCurrentSpeed", new_speed)
+            except HomeAssistantError as err:
+                # The status was read fine: keep it, the regulator retries on the next poll.
+                _LOGGER.warning("Solar regulation: speed change to %d rpm failed: %s", new_speed, err)
 
     # -------------------------------------------------------------------------
     # DataUpdateCoordinator hooks
