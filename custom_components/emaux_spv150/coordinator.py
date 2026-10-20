@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST
+from homeassistant.const import CONF_HOST, STATE_OFF
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -44,6 +44,17 @@ from .solar import SolarControllerConfig, SolarRegulator
 _LOGGER = logging.getLogger(__name__)
 
 type PumpConfigEntry = ConfigEntry["PumpCoordinator"]
+
+
+def is_switch_off(hass: HomeAssistant, entity_id: str | None) -> bool:
+    """Return True when an external power switch is configured and explicitly OFF.
+
+    Unknown or unavailable states count as ON: the pump may still be powered.
+    """
+    if not entity_id:
+        return False
+    state = hass.states.get(entity_id)
+    return state is not None and state.state.lower() == STATE_OFF
 
 
 class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
@@ -330,25 +341,24 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
     # -------------------------------------------------------------------------
 
     async def _async_setup(self) -> None:
-        """Verify pump is reachable before entities are set up."""
+        """Verify pump is reachable before entities are set up, unless its power switch is OFF."""
+        if is_switch_off(self.hass, self.switch_entity_id):
+            return
         if not await self.api_pump.get_status():
             raise ConfigEntryNotReady("Cannot reach pump during setup")
 
     async def _async_update_data(self) -> PumpStatus:
         """Fetch latest pump data and apply solar regulation if active."""
-        switch_on = True
-        if self.switch_entity_id:
-            switch_state = self.hass.states.get(self.switch_entity_id)
-            switch_on = not (switch_state and switch_state.state.lower() == "off")
-            if not switch_on:
-                self.pump_switch_off = True
-                self._update_uptime(False)
-                self._prev_running = False
-                self._pump_started_at = None
-                self._priming_done = True
-                self._last_speed_change_time = None
-                self._prev_switch_on = False
-                return PumpStatus.zeroed()
+        switch_on = not is_switch_off(self.hass, self.switch_entity_id)
+        if not switch_on:
+            self.pump_switch_off = True
+            self._update_uptime(False)
+            self._prev_running = False
+            self._pump_started_at = None
+            self._priming_done = True
+            self._last_speed_change_time = None
+            self._prev_switch_on = False
+            return PumpStatus.zeroed()
 
         self.pump_switch_off = False
         raw = await self.api_pump.get_status()

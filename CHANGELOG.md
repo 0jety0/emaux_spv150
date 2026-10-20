@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.1.3] — 2026-10-20
+
+### Fixed
+
+- **Powered-off pump no longer blocks setup or configuration**: when the external power switch (`switch_entity`) is explicitly `off`, the integration no longer contacts the pump during setup or in the config, reconfigure and options flows. Previously, a pump switched off at its plug (e.g. during winter) left the config entry in an endless "Cannot reach pump during setup" retry loop, and options could not be saved (`cannot_connect`). Entities stay unavailable while the switch is off, exactly as during polling, and the pump is contacted again on the first poll after the switch turns `on`. An `unknown`/`unavailable` switch still counts as on.
+
 ## [2.1.2] — 2026-08-07
 
 ### Changed

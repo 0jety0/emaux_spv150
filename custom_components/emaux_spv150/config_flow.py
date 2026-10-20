@@ -5,6 +5,7 @@ from typing import Any
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST
+from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -29,6 +30,7 @@ from .const import (
     DEFAULT_STEP_UP,
     DOMAIN,
 )
+from .coordinator import is_switch_off
 
 _HOSTNAME_RE = re.compile(r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))*$")
 
@@ -43,6 +45,17 @@ def is_valid_host(host: str) -> bool:
         return True
     except ValueError:
         return bool(_HOSTNAME_RE.match(host))
+
+
+async def _pump_unreachable(hass: HomeAssistant, host: str, switch_entity_id: str | None) -> bool:
+    """Return True when the pump should answer but does not.
+
+    The check is skipped while the external power switch is OFF: a powered-off
+    pump cannot answer, and that must not block saving the configuration.
+    """
+    if is_switch_off(hass, switch_entity_id):
+        return False
+    return not await PumpAPI(host, async_get_clientsession(hass)).get_status()
 
 
 class EmauxSpv150ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -62,8 +75,7 @@ class EmauxSpv150ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(host)
                 self._abort_if_unique_id_configured()
 
-                status = await PumpAPI(host, async_get_clientsession(self.hass)).get_status()
-                if not status:
+                if await _pump_unreachable(self.hass, host, user_input.get(CONF_SWITCH_ENTITY)):
                     errors["base"] = "cannot_connect"
                 else:
                     return self.async_create_entry(
@@ -97,8 +109,7 @@ class EmauxSpv150ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not is_valid_host(host):
                 errors["base"] = "invalid_host"
             else:
-                status = await PumpAPI(host, async_get_clientsession(self.hass)).get_status()
-                if not status:
+                if await _pump_unreachable(self.hass, host, user_input.get(CONF_SWITCH_ENTITY)):
                     errors["base"] = "cannot_connect"
                 else:
                     return self.async_update_reload_and_abort(
@@ -149,9 +160,7 @@ class EmauxSpv150OptionsFlow(config_entries.OptionsFlow):
                 errors[CONF_DEAD_BAND_LOWER] = "dead_band_range_invalid"
 
             if not errors:
-                host = user_input[CONF_HOST]
-                status = await PumpAPI(host, async_get_clientsession(self.hass)).get_status()
-                if not status:
+                if await _pump_unreachable(self.hass, user_input[CONF_HOST], user_input.get(CONF_SWITCH_ENTITY)):
                     errors["base"] = "cannot_connect"
                 else:
                     preserved = {k: v for k, v in self.config_entry.options.items() if k not in user_input}
