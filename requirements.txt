@@ -1,4 +1,0 @@
-homeassistant
-aiohttp
-re
-pydantic
