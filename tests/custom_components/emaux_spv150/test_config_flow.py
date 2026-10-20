@@ -278,3 +278,29 @@ async def test_user_step_strips_spaces_around_host(hass: HomeAssistant):
         await hass.async_block_till_done()
 
     assert result["data"]["host"] == MOCK_HOST
+
+
+@pytest.mark.asyncio
+async def test_options_flow_can_remove_the_power_switch(hass: HomeAssistant, config_entry_with_switch, mock_pump_api):
+    """Clearing the optional switch field must remove the switch, not silently keep the old one."""
+    await _setup_with_switch(hass, config_entry_with_switch, "on")
+
+    with _patch_api():
+        result = await hass.config_entries.options.async_init(config_entry_with_switch.entry_id)
+        result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"host": MOCK_HOST})
+
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert config_entry_with_switch.options["switch_entity"] == ""
+
+
+@pytest.mark.asyncio
+async def test_reconfigure_can_remove_the_power_switch(hass: HomeAssistant, config_entry_with_switch, mock_pump_api):
+    """Clearing the optional switch field in reconfigure must remove the switch."""
+    await _setup_with_switch(hass, config_entry_with_switch, "on")
+
+    with _patch_api():
+        result = await config_entry_with_switch.start_reconfigure_flow(hass)
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input={"host": MOCK_HOST})
+
+    assert result["reason"] == "reconfigure_successful"
+    assert config_entry_with_switch.data["switch_entity"] == ""
