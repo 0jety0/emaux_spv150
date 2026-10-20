@@ -112,18 +112,25 @@ class EmauxSpv150ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if await _pump_unreachable(self.hass, host, user_input.get(CONF_SWITCH_ENTITY)):
                     errors["base"] = "cannot_connect"
                 else:
-                    return self.async_update_reload_and_abort(
+                    connection = {
+                        CONF_HOST: host,
+                        CONF_SWITCH_ENTITY: user_input.get(CONF_SWITCH_ENTITY) or "",
+                        CONF_GRID_POWER_ENTITY: user_input.get(CONF_GRID_POWER_ENTITY) or "",
+                    }
+                    # The coordinator reads options first: drop the copies the options flow may
+                    # have stored so the reconfigured values win. The update listener reloads.
+                    return self.async_update_and_abort(
                         entry,
-                        data_updates={
-                            CONF_HOST: host,
-                            CONF_SWITCH_ENTITY: user_input.get(CONF_SWITCH_ENTITY) or "",
-                            CONF_GRID_POWER_ENTITY: user_input.get(CONF_GRID_POWER_ENTITY) or "",
-                        },
+                        unique_id=host,
+                        data_updates=connection,
+                        options={k: v for k, v in entry.options.items() if k not in connection},
                     )
 
-        current_host = (entry.data or {}).get(CONF_HOST, DEFAULT_HOST)
-        current_switch = (entry.data or {}).get(CONF_SWITCH_ENTITY) or ""
-        current_grid = (entry.data or {}).get(CONF_GRID_POWER_ENTITY, "")
+        # Show the values actually in use (options win over data, as in the coordinator).
+        settings = {**entry.data, **entry.options}
+        current_host = settings.get(CONF_HOST) or DEFAULT_HOST
+        current_switch = settings.get(CONF_SWITCH_ENTITY) or ""
+        current_grid = settings.get(CONF_GRID_POWER_ENTITY) or ""
 
         return self.async_show_form(
             step_id="reconfigure",

@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.emaux_spv150.const import DOMAIN
 
@@ -213,3 +214,51 @@ async def test_options_flow_cannot_connect_when_switch_on(hass: HomeAssistant, c
 
     assert result["type"] == FlowResultType.FORM
     assert result["errors"] == {"base": "cannot_connect"}
+
+
+@pytest.mark.asyncio
+async def test_reconfigure_wins_over_host_saved_by_options_flow(hass: HomeAssistant, mock_pump_api):
+    """A host set earlier through the options flow must not shadow the reconfigured one."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"host": MOCK_HOST, "switch_entity": ""},
+        options={"host": "192.168.1.99", "setpoint": 80},
+        unique_id=MOCK_HOST,
+    )
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    new_host = "192.168.1.77"
+    with _patch_api():
+        result = await entry.start_reconfigure_flow(hass)
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={"host": new_host, "switch_entity": "", "grid_power_entity": ""},
+        )
+        await hass.async_block_till_done()
+
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.runtime_data.host == new_host
+    assert entry.unique_id == new_host
+    assert entry.options["setpoint"] == 80
+
+
+@pytest.mark.asyncio
+async def test_reconfigure_does_not_use_deprecated_reload_helper(
+    hass: HomeAssistant, config_entry, mock_pump_api, caplog
+):
+    """Reconfigure must let the update listener reload (the reload helper breaks in HA 2026.12)."""
+    config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    with _patch_api():
+        result = await config_entry.start_reconfigure_flow(hass)
+        await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={"host": "192.168.1.77", "switch_entity": "", "grid_power_entity": ""},
+        )
+        await hass.async_block_till_done()
+
+    assert "should use it for scheduling a reload" not in caplog.text
