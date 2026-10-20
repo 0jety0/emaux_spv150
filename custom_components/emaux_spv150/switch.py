@@ -1,6 +1,6 @@
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .coordinator import PumpConfigEntry, PumpCoordinator
 from .entity import PumpBaseEntity
@@ -9,7 +9,7 @@ PARALLEL_UPDATES = 1
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: PumpConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: PumpConfigEntry, async_add_entities: AddConfigEntryEntitiesCallback
 ) -> None:
     """Set up the Emaux SPV150 switch entities."""
     coordinator: PumpCoordinator = entry.runtime_data

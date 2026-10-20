@@ -102,7 +102,6 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         # Startup priming tracking (True = no priming needed until switch OFF→ON)
         self._pump_started_at: datetime | None = None
         self._priming_done: bool = True
-        self._prev_running: bool = False
         self._prev_switch_on: bool = True
 
         # Energy tracking
@@ -359,7 +358,6 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         if not switch_on:
             self.pump_switch_off = True
             self._update_uptime(False)
-            self._prev_running = False
             self._pump_started_at = None
             self._priming_done = True
             self._last_speed_change_time = None
@@ -387,7 +385,6 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
                 self._priming_done = False
                 _LOGGER.debug("Switch turned ON: priming window of %ds begins", self.priming_time)
             self._prev_switch_on = switch_on
-        self._prev_running = status.running
 
         # After priming window elapses, unlock solar regulation
         if (

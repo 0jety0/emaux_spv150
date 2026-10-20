@@ -8,7 +8,7 @@ from homeassistant.components.number import (
 )
 from homeassistant.const import REVOLUTIONS_PER_MINUTE, UnitOfPower, UnitOfTime
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .coordinator import PumpConfigEntry, PumpCoordinator
 from .entity import PumpBaseEntity
@@ -168,7 +168,7 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: PumpConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: PumpConfigEntry, async_add_entities: AddConfigEntryEntitiesCallback
 ) -> None:
     """Set up Emaux SPV150 number entities."""
     coordinator: PumpCoordinator = entry.runtime_data
