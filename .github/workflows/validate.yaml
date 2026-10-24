@@ -23,3 +23,6 @@ jobs:
         uses: hacs/action@22.5.0
         with:
           category: integration
+          # PolyForm Noncommercial is not an SPDX license GitHub detects (shown as "Other"),
+          # so the license check cannot pass; it is only required for the HACS default store.
+          ignore: license
