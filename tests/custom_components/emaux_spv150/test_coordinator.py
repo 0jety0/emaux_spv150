@@ -8,7 +8,7 @@ from homeassistant.helpers.update_coordinator import UpdateFailed
 from homeassistant.util import dt as dt_util
 
 from custom_components.emaux_spv150.api import PumpError
-from custom_components.emaux_spv150.coordinator import PumpCoordinator
+from custom_components.emaux_spv150.coordinator import PumpCoordinator, SpeedChangeThrottled
 
 from .conftest import MOCK_STATUS, MOCK_SWITCH
 
@@ -79,12 +79,11 @@ async def test_speed_change_throttle(hass: HomeAssistant, config_entry, mock_pum
     coordinator.speed_change_interval = 60
 
     with patch.object(coordinator, "api_pump", mock_pump_api):
-        result1 = await coordinator.async_set_pump_key("SetCurrentSpeed", 1500)
-        assert result1 is not None
+        await coordinator.async_set_pump_key("SetCurrentSpeed", 1500)
+        with pytest.raises(SpeedChangeThrottled) as exc_info:
+            await coordinator.async_set_pump_key("SetCurrentSpeed", 1800)
 
-        result2 = await coordinator.async_set_pump_key("SetCurrentSpeed", 1800)
-        assert result2 is None
-
+    assert exc_info.value.translation_key == "speed_change_throttled"
     assert mock_pump_api.set_key.call_count == 1
 
 
@@ -437,3 +436,20 @@ async def test_solar_regulation_waits_for_a_numeric_grid_value(
         await coordinator._apply_solar_regulation(1500)
 
     mock_pump_api.set_key.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_throttled_solar_step_is_skipped_quietly(hass: HomeAssistant, config_entry, mock_pump_api, caplog):
+    """The solar mode waits for the next allowed change without logging a warning at every poll."""
+    config_entry.add_to_hass(hass)
+    coordinator = PumpCoordinator(hass, config_entry)
+    coordinator.grid_power_entity = "sensor.grid_power"
+    coordinator.speed_change_interval = 60
+    hass.states.async_set("sensor.grid_power", "-2000")  # exporting: the regulator speeds up
+
+    with patch.object(coordinator, "api_pump", mock_pump_api):
+        await coordinator._apply_solar_regulation(1500)
+        await coordinator._apply_solar_regulation(1800)
+
+    mock_pump_api.set_key.assert_awaited_once()
+    assert "failed" not in caplog.text

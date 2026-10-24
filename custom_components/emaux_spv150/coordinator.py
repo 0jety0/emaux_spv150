@@ -5,7 +5,7 @@ from typing import Any, override
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import CONF_HOST, STATE_OFF, STATE_ON
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -70,6 +70,10 @@ def is_pump_expected_on(hass: HomeAssistant, entity_id: str | None) -> bool:
         return True
     state = hass.states.get(entity_id)
     return state is not None and state.state.lower() == STATE_ON
+
+
+class SpeedChangeThrottled(ServiceValidationError):
+    """A speed change was asked before the minimum interval since the previous one."""
 
 
 class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
@@ -251,18 +255,18 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
     # Pump command
     # -------------------------------------------------------------------------
 
-    async def async_set_pump_key(self, key: str, value: int) -> str | None:
-        """Send a command to the pump, respecting the speed-change throttle (None when throttled)."""
+    async def async_set_pump_key(self, key: str, value: int) -> str:
+        """Send a command to the pump; a speed change within the minimum interval raises SpeedChangeThrottled."""
         if key == "SetCurrentSpeed" and self.speed_change_interval > 0:
             now = dt_util.utcnow()
             if self._last_speed_change_time is not None:
                 elapsed = (now - self._last_speed_change_time).total_seconds()
                 if elapsed < self.speed_change_interval:
-                    _LOGGER.debug(
-                        "Speed change throttled: %.0fs remaining",
-                        self.speed_change_interval - elapsed,
+                    raise SpeedChangeThrottled(
+                        translation_domain=DOMAIN,
+                        translation_key="speed_change_throttled",
+                        translation_placeholders={"interval": str(self.speed_change_interval)},
                     )
-                    return None
         try:
             result = await self.api_pump.set_key(key, value)
         except PumpError as err:
@@ -365,6 +369,8 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
             )
             try:
                 await self.async_set_pump_key("SetCurrentSpeed", new_speed)
+            except SpeedChangeThrottled:
+                _LOGGER.debug("Solar regulation: speed change to %d rpm throttled", new_speed)
             except HomeAssistantError as err:
                 # The status was read fine: keep it, the regulator retries on the next poll.
                 _LOGGER.warning("Solar regulation: speed change to %d rpm failed: %s", new_speed, err)

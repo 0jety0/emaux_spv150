@@ -9,10 +9,8 @@ from homeassistant.components.number import (
 )
 from homeassistant.const import REVOLUTIONS_PER_MINUTE, EntityCategory, UnitOfPower, UnitOfTime
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN
 from .coordinator import PumpConfigEntry, PumpCoordinator
 from .entity import PumpBaseEntity
 
@@ -203,12 +201,7 @@ class PumpNumber(PumpBaseEntity, NumberEntity):
         """Send the new value to the pump or apply it locally on the coordinator."""
         description = self.entity_description
         if description.set_key is not None:
-            if await self.coordinator.async_set_pump_key(description.set_key, int(value)) is None:
-                raise ServiceValidationError(
-                    translation_domain=DOMAIN,
-                    translation_key="speed_change_throttled",
-                    translation_placeholders={"interval": str(self.coordinator.speed_change_interval)},
-                )
+            await self.coordinator.async_set_pump_key(description.set_key, int(value))
             await self.coordinator.async_request_refresh()
         elif description.set_fn is not None:
             description.set_fn(self.coordinator, value)
