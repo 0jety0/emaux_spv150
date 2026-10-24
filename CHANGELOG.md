@@ -1,5 +1,34 @@
 # Changelog
 
+## [2.3.0] — 2026-10-24
+
+Requires **Home Assistant 2026.10** or later (Python 3.14).
+
+### Fixed
+
+- **Pump powered off at startup**: right after a Home Assistant restart the smart plug's state stays unknown for a minute or two (or its entity does not exist yet). A pump that does not answer then no longer fails the setup or marks the integration as needing attention. Once running, a silent pump is reported as unavailable as before.
+- **Log flood**: an unreachable pump is logged once when it stops answering and once when it answers again, instead of an error at every poll.
+- **Speed change refused silently**: a speed change sent within the minimum interval now shows an error saying when to retry, instead of being dropped. Automations that set the speed twice within the interval now get that error.
+- **Pump address in errors**: error messages no longer contain the pump IP.
+
+### Added
+
+- **Diagnostics download** (pump address removed).
+- **Entity pickers** in the setup, reconfigure and options forms: the power switch field lists switches and the grid field lists power sensors (`device_class: power`). A grid sensor without that device class, or a non-switch power entity, can no longer be picked; an already saved one keeps working.
+- **Field descriptions** in every form.
+
+### Changed
+
+- Translated error messages; icons moved to `icons.json` (same icons).
+- Sensors no longer limit parallel updates; the device info is built once.
+
+### Tooling & project
+
+- Minimum Home Assistant 2026.10.0 in `hacs.json`, Python >= 3.14.2, lock refreshed (tests on Home Assistant 2026.10.2).
+- `mypy --strict` with Home Assistant core's settings in CI and `mise run typecheck`; schemas use `probatio`; `@override` everywhere.
+- 100 % test coverage per module; `quality_scale.yaml` tracks every Integration Quality Scale rule.
+- README: data updates, supported devices, known limitations, troubleshooting, removal.
+
 ## [2.2.0] — 2026-10-20
 
 ### Fixed
