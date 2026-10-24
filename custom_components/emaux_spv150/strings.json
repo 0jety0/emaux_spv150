@@ -109,6 +109,7 @@
   },
   "exceptions": {
     "update_failed": { "message": "Could not read the pump status: {error}" },
-    "command_failed": { "message": "The pump did not accept command {command}: {error}" }
+    "command_failed": { "message": "The pump did not accept command {command}: {error}" },
+    "speed_change_throttled": { "message": "The speed can change at most once every {interval} s. Try again shortly." }
   }
 }

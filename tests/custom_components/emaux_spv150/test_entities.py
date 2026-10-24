@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from homeassistant.const import STATE_UNAVAILABLE, EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.icon import async_get_icons
@@ -161,3 +162,21 @@ async def test_all_entities_belong_to_one_pump_device(hass: HomeAssistant, confi
 
     assert [(d.manufacturer, d.model, d.name) for d in devices] == [("Emaux", "SPV150", "Emaux SPV150")]
     assert {e.device_id for e in entries} == {devices[0].id}
+
+
+@pytest.mark.asyncio
+async def test_speed_change_within_the_minimum_interval_is_refused_with_a_reason(
+    hass: HomeAssistant, config_entry, mock_pump_api
+):
+    """A throttled speed change tells the user why instead of being dropped silently."""
+    config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    entity_id = _entity_id(hass, "number", "current_speed")
+    await hass.services.async_call("number", "set_value", {"entity_id": entity_id, "value": 1800}, blocking=True)
+
+    with pytest.raises(ServiceValidationError) as exc_info:
+        await hass.services.async_call("number", "set_value", {"entity_id": entity_id, "value": 2000}, blocking=True)
+
+    assert exc_info.value.translation_key == "speed_change_throttled"
+    mock_pump_api.set_key.assert_awaited_once_with("SetCurrentSpeed", 1800)
