@@ -4,10 +4,12 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.config_entries import ConfigFlowResult
-from homeassistant.const import CONF_HOST
+from homeassistant.const import CONF_HOST, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.selector import EntityFilterSelectorConfig, EntitySelector, EntitySelectorConfig
 
 from .api import PumpAPI, PumpError
 from .const import (
@@ -31,6 +33,13 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import is_pump_expected_on
+
+SWITCH_SELECTOR = EntitySelector(EntitySelectorConfig(filter=EntityFilterSelectorConfig(domain=Platform.SWITCH)))
+GRID_POWER_SELECTOR = EntitySelector(
+    EntitySelectorConfig(
+        filter=EntityFilterSelectorConfig(domain=Platform.SENSOR, device_class=SensorDeviceClass.POWER)
+    )
+)
 
 _HOSTNAME_RE = re.compile(r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))*$")
 
@@ -62,6 +71,23 @@ async def _pump_unreachable(hass: HomeAssistant, host: str, switch_entity_id: st
     return False
 
 
+def _connection_schema(host: str) -> vol.Schema:
+    """Fields shared by the user and reconfigure steps."""
+    return vol.Schema(
+        {
+            vol.Required(CONF_HOST, default=host): str,
+            vol.Optional(CONF_SWITCH_ENTITY): SWITCH_SELECTOR,
+            vol.Optional(CONF_GRID_POWER_ENTITY): GRID_POWER_SELECTOR,
+        }
+    )
+
+
+def _suggested_entities(switch_entity: str, grid_power_entity: str) -> dict[str, str]:
+    """Suggested values for the entity fields, leaving out the empty ones (no entity to preselect)."""
+    entities = {CONF_SWITCH_ENTITY: switch_entity, CONF_GRID_POWER_ENTITY: grid_power_entity}
+    return {key: value for key, value in entities.items() if value}
+
+
 class EmauxSpv150ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Emaux SPV150."""
 
@@ -91,17 +117,7 @@ class EmauxSpv150ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         },
                     )
 
-        return self.async_show_form(
-            step_id="user",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_HOST, default=DEFAULT_HOST): str,
-                    vol.Optional(CONF_SWITCH_ENTITY): str,
-                    vol.Optional(CONF_GRID_POWER_ENTITY): str,
-                }
-            ),
-            errors=errors,
-        )
+        return self.async_show_form(step_id="user", data_schema=_connection_schema(DEFAULT_HOST), errors=errors)
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle reconfiguration of an existing entry."""
@@ -136,17 +152,10 @@ class EmauxSpv150ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         current_switch = settings.get(CONF_SWITCH_ENTITY) or ""
         current_grid = settings.get(CONF_GRID_POWER_ENTITY) or ""
 
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_HOST, default=current_host): str,
-                vol.Optional(CONF_SWITCH_ENTITY): str,
-                vol.Optional(CONF_GRID_POWER_ENTITY): str,
-            }
-        )
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=self.add_suggested_values_to_schema(
-                schema, {CONF_SWITCH_ENTITY: current_switch, CONF_GRID_POWER_ENTITY: current_grid}
+                _connection_schema(current_host), _suggested_entities(current_switch, current_grid)
             ),
             errors=errors,
         )
@@ -191,8 +200,8 @@ class EmauxSpv150OptionsFlow(config_entries.OptionsFlow):
             {
                 vol.Required(CONF_HOST, default=opts.get(CONF_HOST, data.get(CONF_HOST, DEFAULT_HOST))): str,
                 # Suggested (not default) values: a default would come back when the field is cleared.
-                vol.Optional(CONF_SWITCH_ENTITY): str,
-                vol.Optional(CONF_GRID_POWER_ENTITY): str,
+                vol.Optional(CONF_SWITCH_ENTITY): SWITCH_SELECTOR,
+                vol.Optional(CONF_GRID_POWER_ENTITY): GRID_POWER_SELECTOR,
                 vol.Optional(CONF_SETPOINT, default=opts.get(CONF_SETPOINT, DEFAULT_SETPOINT)): vol.Coerce(float),
                 vol.Optional(
                     CONF_DEAD_BAND_LOWER, default=opts.get(CONF_DEAD_BAND_LOWER, DEFAULT_DEAD_BAND_LOWER)
@@ -211,10 +220,10 @@ class EmauxSpv150OptionsFlow(config_entries.OptionsFlow):
                 ): vol.All(vol.Coerce(int), vol.Range(min=0, max=300)),
             }
         )
-        current = {
-            CONF_SWITCH_ENTITY: opts.get(CONF_SWITCH_ENTITY, data.get(CONF_SWITCH_ENTITY)) or "",
-            CONF_GRID_POWER_ENTITY: opts.get(CONF_GRID_POWER_ENTITY, data.get(CONF_GRID_POWER_ENTITY)) or "",
-        }
+        current = _suggested_entities(
+            opts.get(CONF_SWITCH_ENTITY, data.get(CONF_SWITCH_ENTITY)) or "",
+            opts.get(CONF_GRID_POWER_ENTITY, data.get(CONF_GRID_POWER_ENTITY)) or "",
+        )
         return self.async_show_form(
             step_id="init",
             data_schema=self.add_suggested_values_to_schema(schema, current),

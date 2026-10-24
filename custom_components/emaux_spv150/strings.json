@@ -6,7 +6,12 @@
         "data": {
           "host": "Pump IP address",
           "switch_entity": "External power switch entity (optional)",
-          "grid_power_entity": "Grid power sensor entity (optional, any entity_id)"
+          "grid_power_entity": "Grid power sensor entity (optional)"
+        },
+        "data_description": {
+          "host": "IP address or hostname of the pump on your local network.",
+          "switch_entity": "Smart plug or switch that powers the pump. While it is not on, the pump is not polled and its values show as unavailable.",
+          "grid_power_entity": "Power sensor of your grid connection, positive when importing and negative when exporting. Needed for the solar mode."
         }
       },
       "reconfigure": {
@@ -14,7 +19,12 @@
         "data": {
           "host": "Pump IP address",
           "switch_entity": "External power switch entity (optional)",
-          "grid_power_entity": "Grid power sensor entity (optional, any entity_id)"
+          "grid_power_entity": "Grid power sensor entity (optional)"
+        },
+        "data_description": {
+          "host": "IP address or hostname of the pump on your local network.",
+          "switch_entity": "Smart plug or switch that powers the pump. While it is not on, the pump is not polled and its values show as unavailable.",
+          "grid_power_entity": "Power sensor of your grid connection, positive when importing and negative when exporting. Needed for the solar mode."
         }
       }
     },
@@ -34,7 +44,7 @@
         "data": {
           "host": "Pump IP address",
           "switch_entity": "External power switch entity (optional)",
-          "grid_power_entity": "Grid power sensor entity (any entity_id)",
+          "grid_power_entity": "Grid power sensor entity (optional)",
           "setpoint": "Setpoint (W) — target grid power for the P-controller",
           "dead_band_lower": "Dead band lower bound (W) — below this: speed up",
           "dead_band_upper": "Dead band upper bound (W) — above this: speed down",
@@ -42,6 +52,18 @@
           "step_down": "Max speed decrease step (RPM)",
           "priming_time": "Startup priming wait (seconds) — delayed after physical switch ON",
           "speed_change_interval": "Minimum interval between speed changes (seconds, 0 = no limit)"
+        },
+        "data_description": {
+          "host": "IP address or hostname of the pump on your local network.",
+          "switch_entity": "Smart plug or switch that powers the pump. While it is not on, the pump is not polled and its values show as unavailable.",
+          "grid_power_entity": "Power sensor of your grid connection, positive when importing and negative when exporting. Needed for the solar mode.",
+          "setpoint": "Grid power the solar mode aims for.",
+          "dead_band_lower": "Below this grid power the solar mode speeds the pump up.",
+          "dead_band_upper": "Above this grid power the solar mode slows the pump down.",
+          "step_up": "Largest speed increase applied in one regulation step.",
+          "step_down": "Largest speed decrease applied in one regulation step.",
+          "priming_time": "After the power switch turns on, the pump runs at its own speed this long before the solar mode takes over.",
+          "speed_change_interval": "Minimum time between two speed changes sent to the pump. 0 disables the limit."
         }
       }
     },

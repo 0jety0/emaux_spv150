@@ -1,8 +1,11 @@
+import json
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers.selector import EntitySelector
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.emaux_spv150.api import PumpError
@@ -102,7 +105,7 @@ async def test_reconfigure_success(hass: HomeAssistant, config_entry, mock_pump_
 
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
-            user_input={"host": new_host, "grid_power_entity": ""},
+            user_input={"host": new_host},
         )
 
     assert result["type"] == FlowResultType.ABORT
@@ -177,7 +180,7 @@ async def test_reconfigure_skips_pump_when_switch_off(hass: HomeAssistant, confi
         result = await config_entry_with_switch.start_reconfigure_flow(hass)
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
-            user_input={"host": new_host, "switch_entity": MOCK_SWITCH, "grid_power_entity": ""},
+            user_input={"host": new_host, "switch_entity": MOCK_SWITCH},
         )
 
     assert result["type"] == FlowResultType.ABORT
@@ -254,7 +257,7 @@ async def test_reconfigure_wins_over_host_saved_by_options_flow(hass: HomeAssist
         result = await entry.start_reconfigure_flow(hass)
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
-            user_input={"host": new_host, "switch_entity": "", "grid_power_entity": ""},
+            user_input={"host": new_host},
         )
         await hass.async_block_till_done()
 
@@ -277,7 +280,7 @@ async def test_reconfigure_does_not_use_deprecated_reload_helper(
         result = await config_entry.start_reconfigure_flow(hass)
         await hass.config_entries.flow.async_configure(
             result["flow_id"],
-            user_input={"host": "192.168.1.77", "switch_entity": "", "grid_power_entity": ""},
+            user_input={"host": "192.168.1.77"},
         )
         await hass.async_block_till_done()
 
@@ -324,3 +327,43 @@ async def test_reconfigure_can_remove_the_power_switch(hass: HomeAssistant, conf
 
     assert result["reason"] == "reconfigure_successful"
     assert config_entry_with_switch.data["switch_entity"] == ""
+
+
+STRINGS = json.loads(
+    (Path(__file__).parents[3] / "custom_components" / "emaux_spv150" / "strings.json").read_text(encoding="utf-8")
+)
+
+
+async def _shown_forms(hass: HomeAssistant, entry) -> dict[str, dict]:
+    """Open the user, reconfigure and options forms; map each step to (strings section, form result)."""
+    user = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    reconfigure = await entry.start_reconfigure_flow(hass)
+    options = await hass.config_entries.options.async_init(entry.entry_id)
+    return {
+        "user": (STRINGS["config"]["step"]["user"], user),
+        "reconfigure": (STRINGS["config"]["step"]["reconfigure"], reconfigure),
+        "init": (STRINGS["options"]["step"]["init"], options),
+    }
+
+
+@pytest.mark.asyncio
+async def test_every_form_field_has_a_label_and_a_description(hass: HomeAssistant, config_entry, mock_pump_api):
+    """Each field of every form is explained in strings.json (data + data_description)."""
+    await _setup_with_switch(hass, config_entry, "on")
+
+    for strings, form in (await _shown_forms(hass, config_entry)).values():
+        fields = {str(key) for key in form["data_schema"].schema}
+        assert fields - strings["data"].keys() == set(), form["step_id"]
+        assert fields - strings["data_description"].keys() == set(), form["step_id"]
+
+
+@pytest.mark.asyncio
+async def test_entity_fields_offer_only_matching_entities(hass: HomeAssistant, config_entry, mock_pump_api):
+    """The power switch field lists switches and the grid field lists power sensors, instead of free text."""
+    await _setup_with_switch(hass, config_entry, "on")
+
+    for _, form in (await _shown_forms(hass, config_entry)).values():
+        schema = {str(key): value for key, value in form["data_schema"].schema.items()}
+        assert isinstance(schema["switch_entity"], EntitySelector)
+        assert schema["switch_entity"].config["filter"] == [{"domain": ["switch"]}]
+        assert schema["grid_power_entity"].config["filter"] == [{"domain": ["sensor"], "device_class": ["power"]}]
