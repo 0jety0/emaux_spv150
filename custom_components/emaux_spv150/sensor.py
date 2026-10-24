@@ -41,7 +41,6 @@ SENSOR_DESCRIPTIONS: tuple[PumpSensorDescription, ...] = (
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:flash",
         value_fn=lambda c: c.data.current_watts,
     ),
     PumpSensorDescription(
@@ -51,7 +50,6 @@ SENSOR_DESCRIPTIONS: tuple[PumpSensorDescription, ...] = (
         suggested_unit_of_measurement=UnitOfVolumeFlowRate.LITERS_PER_MINUTE,
         device_class=SensorDeviceClass.VOLUME_FLOW_RATE,
         state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:water-pump",
         value_fn=lambda c: c.data.current_gpm,
     ),
     PumpSensorDescription(
@@ -61,7 +59,6 @@ SENSOR_DESCRIPTIONS: tuple[PumpSensorDescription, ...] = (
         native_unit_of_measurement=UnitOfTime.HOURS,
         device_class=SensorDeviceClass.DURATION,
         state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:clock-start",
         value_fn=lambda c: c.uptime_hours,
     ),
 )
@@ -100,7 +97,6 @@ class PumpEnergySensor(PumpBaseEntity, RestoreSensor):
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
-    _attr_icon = "mdi:lightning-bolt-circle"
 
     def __init__(self, coordinator: PumpCoordinator) -> None:
         super().__init__(coordinator)

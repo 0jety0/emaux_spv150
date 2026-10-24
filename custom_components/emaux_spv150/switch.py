@@ -20,7 +20,6 @@ class RunStopSwitchEntity(PumpBaseEntity, SwitchEntity):
     """Switch entity to control the pump run/stop state."""
 
     _attr_translation_key = "running_status"
-    _attr_icon = "mdi:power"
 
     def __init__(self, coordinator: PumpCoordinator) -> None:
         super().__init__(coordinator)

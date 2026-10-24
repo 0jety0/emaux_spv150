@@ -22,7 +22,6 @@ class ControlModeSelect(PumpBaseEntity, SelectEntity):
 
     _attr_translation_key = "control_mode"
     _attr_options = CONTROL_MODES
-    _attr_icon = "mdi:tune"
 
     def __init__(self, coordinator: PumpCoordinator) -> None:
         super().__init__(coordinator)
