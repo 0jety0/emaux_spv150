@@ -10,13 +10,7 @@ from homeassistant.util import dt as dt_util
 from custom_components.emaux_spv150.api import PumpError
 from custom_components.emaux_spv150.coordinator import PumpCoordinator
 
-MOCK_STATUS = {
-    "CurrentSpeed": "1500",
-    "CurrentWatts": "300",
-    "RunningStatus": "1",
-    "SpeedSelected": "2",
-    "CurrentGPM": "45",
-}
+from .conftest import MOCK_STATUS, MOCK_SWITCH
 
 
 @pytest.mark.asyncio
@@ -64,7 +58,7 @@ async def test_update_data_pump_error_raises(hass: HomeAssistant, config_entry, 
 @pytest.mark.asyncio
 async def test_update_data_switch_off(hass: HomeAssistant, config_entry_with_switch, mock_pump_api):
     """When the linked switch is OFF, coordinator returns zeroed data without calling the API."""
-    hass.states.async_set("switch.pool_power", "off")
+    hass.states.async_set(MOCK_SWITCH, "off")
     config_entry_with_switch.add_to_hass(hass)
     coordinator = PumpCoordinator(hass, config_entry_with_switch)
 
@@ -111,7 +105,7 @@ async def test_speed_change_non_speed_key_not_throttled(hass: HomeAssistant, con
 @pytest.mark.asyncio
 async def test_priming_sequence_unlocks_solar_after_delay(hass: HomeAssistant, config_entry_with_switch, mock_pump_api):
     """After priming completes, _priming_done becomes True (triggered by switch OFF→ON)."""
-    hass.states.async_set("switch.pool_power", "on")
+    hass.states.async_set(MOCK_SWITCH, "on")
     config_entry_with_switch.add_to_hass(hass)
     coordinator = PumpCoordinator(hass, config_entry_with_switch)
     coordinator.control_mode = "solar"
@@ -134,7 +128,7 @@ async def test_priming_sequence_unlocks_solar_after_delay(hass: HomeAssistant, c
 @pytest.mark.asyncio
 async def test_priming_not_done_before_delay(hass: HomeAssistant, config_entry_with_switch, mock_pump_api):
     """Priming should not complete before the configured delay elapses."""
-    hass.states.async_set("switch.pool_power", "on")
+    hass.states.async_set(MOCK_SWITCH, "on")
     config_entry_with_switch.add_to_hass(hass)
     coordinator = PumpCoordinator(hass, config_entry_with_switch)
     coordinator.control_mode = "solar"
@@ -173,17 +167,17 @@ async def test_energy_not_counted_while_switch_off(
     hass: HomeAssistant, config_entry_with_switch, mock_pump_api, freezer
 ):
     """Hours spent with the power switch OFF must not be billed at the next running poll."""
-    hass.states.async_set("switch.pool_power", "on")
+    hass.states.async_set(MOCK_SWITCH, "on")
     config_entry_with_switch.add_to_hass(hass)
     coordinator = PumpCoordinator(hass, config_entry_with_switch)
     mock_pump_api.get_status = AsyncMock(return_value={**MOCK_STATUS, "CurrentWatts": "1000"})
 
     with patch.object(coordinator, "api_pump", mock_pump_api):
         await coordinator._async_update_data()
-        hass.states.async_set("switch.pool_power", "off")
+        hass.states.async_set(MOCK_SWITCH, "off")
         await coordinator._async_update_data()
         freezer.tick(timedelta(hours=12))
-        hass.states.async_set("switch.pool_power", "on")
+        hass.states.async_set(MOCK_SWITCH, "on")
         await coordinator._async_update_data()
 
     assert coordinator.energy_kwh == 0.0

@@ -11,16 +11,9 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.emaux_spv150.api import PumpError
 from custom_components.emaux_spv150.const import DOMAIN
 
-MOCK_HOST = "192.168.1.50"
-MOCK_SWITCH = "switch.pool_power"
+from .conftest import MOCK_HOST, MOCK_STATUS, MOCK_SWITCH
+
 UNREACHABLE = PumpError("connection refused")
-MOCK_STATUS = {
-    "CurrentSpeed": "1500",
-    "CurrentWatts": "300",
-    "RunningStatus": "1",
-    "SpeedSelected": "2",
-    "CurrentGPM": "45",
-}
 
 
 def _patch_api(**get_status):

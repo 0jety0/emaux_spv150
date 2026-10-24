@@ -10,7 +10,7 @@ from pytest_homeassistant_custom_component.common import async_fire_time_changed
 from custom_components.emaux_spv150.api import PumpError
 from custom_components.emaux_spv150.coordinator import PumpCoordinator
 
-from .conftest import MOCK_HOST, MOCK_STATUS
+from .conftest import MOCK_HOST, MOCK_STATUS, MOCK_SWITCH
 
 STATUS_URL = f"http://{MOCK_HOST}/cgi-bin/EpvCgi?name=AllRd"
 
@@ -53,7 +53,7 @@ async def test_setup_reads_the_pump_once(hass: HomeAssistant, config_entry, mock
 @pytest.mark.asyncio
 async def test_setup_skips_pump_when_switch_off(hass: HomeAssistant, config_entry_with_switch, mock_pump_api):
     """A powered-off pump must not block setup: the pump is not contacted at all."""
-    hass.states.async_set("switch.pool_power", "off")
+    hass.states.async_set(MOCK_SWITCH, "off")
     mock_pump_api.get_status.side_effect = PumpError("connection refused")
     config_entry_with_switch.add_to_hass(hass)
 
@@ -69,7 +69,7 @@ async def test_setup_retries_when_switch_on_and_pump_unreachable(
     hass: HomeAssistant, config_entry_with_switch, mock_pump_api
 ):
     """With the switch ON, an unreachable pump still puts the entry in setup retry."""
-    hass.states.async_set("switch.pool_power", "on")
+    hass.states.async_set(MOCK_SWITCH, "on")
     mock_pump_api.get_status.side_effect = PumpError("connection refused")
     config_entry_with_switch.add_to_hass(hass)
 
@@ -119,7 +119,7 @@ async def test_setup_loads_when_switch_state_is_unknown_and_pump_silent(
     hass: HomeAssistant, config_entry_with_switch, mock_pump_api, caplog, switch_state
 ):
     """Right after a restart the plug's state is not known yet: a silent pump is powered off, not broken."""
-    hass.states.async_set("switch.pool_power", switch_state)
+    hass.states.async_set(MOCK_SWITCH, switch_state)
     mock_pump_api.get_status.side_effect = PumpError("connection refused")
     config_entry_with_switch.add_to_hass(hass)
 
@@ -150,13 +150,13 @@ async def test_silent_pump_is_not_an_error_when_switch_becomes_unavailable(
     hass: HomeAssistant, config_entry_with_switch, mock_pump_api, caplog
 ):
     """A Zigbee plug dropping off the network must not turn a powered-off pump into a failure."""
-    hass.states.async_set("switch.pool_power", "on")
+    hass.states.async_set(MOCK_SWITCH, "on")
     config_entry_with_switch.add_to_hass(hass)
     await hass.config_entries.async_setup(config_entry_with_switch.entry_id)
     await hass.async_block_till_done()
 
     mock_pump_api.get_status.side_effect = PumpError("connection refused")
-    hass.states.async_set("switch.pool_power", "unavailable")
+    hass.states.async_set(MOCK_SWITCH, "unavailable")
     await hass.async_block_till_done()
 
     assert config_entry_with_switch.runtime_data.last_update_success
@@ -168,7 +168,7 @@ async def test_pump_answering_while_switch_state_is_unknown_is_read(
     hass: HomeAssistant, config_entry_with_switch, mock_pump_api
 ):
     """An unknown plug state does not hide a pump that answers."""
-    hass.states.async_set("switch.pool_power", "unknown")
+    hass.states.async_set(MOCK_SWITCH, "unknown")
     config_entry_with_switch.add_to_hass(hass)
 
     await hass.config_entries.async_setup(config_entry_with_switch.entry_id)

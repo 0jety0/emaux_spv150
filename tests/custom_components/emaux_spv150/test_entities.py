@@ -14,13 +14,15 @@ from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.emaux_spv150.const import DOMAIN
 
+from .conftest import MOCK_SWITCH
+
 
 def _entity_id(hass: HomeAssistant, platform: str, key: str) -> str:
     return er.async_get(hass).async_get_entity_id(platform, DOMAIN, f"spv150_{key}")
 
 
 async def _setup_with_pump_powered_off(hass: HomeAssistant, entry) -> None:
-    hass.states.async_set("switch.pool_power", "off")
+    hass.states.async_set(MOCK_SWITCH, "off")
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
@@ -123,12 +125,12 @@ async def test_switch_flip_is_reflected_without_waiting_for_the_poll(
     hass: HomeAssistant, config_entry_with_switch, mock_pump_api
 ):
     """Turning the power switch off must make the pump values unavailable at once, not after the next poll."""
-    hass.states.async_set("switch.pool_power", "on")
+    hass.states.async_set(MOCK_SWITCH, "on")
     config_entry_with_switch.add_to_hass(hass)
     await hass.config_entries.async_setup(config_entry_with_switch.entry_id)
     await hass.async_block_till_done()
 
-    hass.states.async_set("switch.pool_power", "off")
+    hass.states.async_set(MOCK_SWITCH, "off")
     await hass.async_block_till_done()
 
     assert hass.states.get(_entity_id(hass, "number", "current_speed")).state == STATE_UNAVAILABLE
