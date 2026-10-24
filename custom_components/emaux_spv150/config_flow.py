@@ -82,7 +82,7 @@ def _connection_schema(host: str) -> probatio.Schema:
     )
 
 
-def _suggested_entities(switch_entity: str, grid_power_entity: str) -> dict[str, str]:
+def _suggested_entities(switch_entity: str | None, grid_power_entity: str | None) -> dict[str, str]:
     """Suggested values for the entity fields, leaving out the empty ones (no entity to preselect)."""
     entities = {CONF_SWITCH_ENTITY: switch_entity, CONF_GRID_POWER_ENTITY: grid_power_entity}
     return {key: value for key, value in entities.items() if value}
@@ -150,13 +150,12 @@ class EmauxSpv150ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Show the values actually in use (options win over data, as in the coordinator).
         settings = {**entry.data, **entry.options}
         current_host = settings.get(CONF_HOST) or DEFAULT_HOST
-        current_switch = settings.get(CONF_SWITCH_ENTITY) or ""
-        current_grid = settings.get(CONF_GRID_POWER_ENTITY) or ""
 
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=self.add_suggested_values_to_schema(
-                _connection_schema(current_host), _suggested_entities(current_switch, current_grid)
+                _connection_schema(current_host),
+                _suggested_entities(settings.get(CONF_SWITCH_ENTITY), settings.get(CONF_GRID_POWER_ENTITY)),
             ),
             errors=errors,
         )
@@ -228,8 +227,8 @@ class EmauxSpv150OptionsFlow(config_entries.OptionsFlow):
             }
         )
         current = _suggested_entities(
-            opts.get(CONF_SWITCH_ENTITY, data.get(CONF_SWITCH_ENTITY)) or "",
-            opts.get(CONF_GRID_POWER_ENTITY, data.get(CONF_GRID_POWER_ENTITY)) or "",
+            opts.get(CONF_SWITCH_ENTITY, data.get(CONF_SWITCH_ENTITY)),
+            opts.get(CONF_GRID_POWER_ENTITY, data.get(CONF_GRID_POWER_ENTITY)),
         )
         return self.async_show_form(
             step_id="init",

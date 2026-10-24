@@ -327,39 +327,46 @@ STRINGS = json.loads(
 )
 
 
-async def _shown_forms(hass: HomeAssistant, entry) -> dict[str, dict]:
-    """Open the user, reconfigure and options forms; map each step to (strings section, form result)."""
-    user = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
-    reconfigure = await entry.start_reconfigure_flow(hass)
-    options = await hass.config_entries.options.async_init(entry.entry_id)
-    return {
-        "user": (STRINGS["config"]["step"]["user"], user),
-        "reconfigure": (STRINGS["config"]["step"]["reconfigure"], reconfigure),
-        "init": (STRINGS["options"]["step"]["init"], options),
-    }
+FORM_OPENERS = {
+    "user": lambda hass, entry: hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"}),
+    "reconfigure": lambda hass, entry: entry.start_reconfigure_flow(hass),
+    "init": lambda hass, entry: hass.config_entries.options.async_init(entry.entry_id),
+}
+
+FORM_STRINGS = {
+    "user": STRINGS["config"]["step"]["user"],
+    "reconfigure": STRINGS["config"]["step"]["reconfigure"],
+    "init": STRINGS["options"]["step"]["init"],
+}
 
 
 @pytest.mark.asyncio
-async def test_every_form_field_has_a_label_and_a_description(hass: HomeAssistant, config_entry, mock_pump_api):
+@pytest.mark.parametrize("step_id", FORM_STRINGS)
+async def test_every_form_field_has_a_label_and_a_description(
+    hass: HomeAssistant, config_entry, mock_pump_api, step_id
+):
     """Each field of every form is explained in strings.json (data + data_description)."""
     await _setup_with_switch(hass, config_entry, "on")
 
-    for strings, form in (await _shown_forms(hass, config_entry)).values():
-        fields = {str(key) for key in form["data_schema"].schema}
-        assert fields - strings["data"].keys() == set(), form["step_id"]
-        assert fields - strings["data_description"].keys() == set(), form["step_id"]
+    form = await FORM_OPENERS[step_id](hass, config_entry)
+
+    fields = {str(key) for key in form["data_schema"].schema}
+    assert fields - FORM_STRINGS[step_id]["data"].keys() == set()
+    assert fields - FORM_STRINGS[step_id]["data_description"].keys() == set()
 
 
 @pytest.mark.asyncio
-async def test_entity_fields_offer_only_matching_entities(hass: HomeAssistant, config_entry, mock_pump_api):
+@pytest.mark.parametrize("step_id", FORM_STRINGS)
+async def test_entity_fields_offer_only_matching_entities(hass: HomeAssistant, config_entry, mock_pump_api, step_id):
     """The power switch field lists switches and the grid field lists power sensors, instead of free text."""
     await _setup_with_switch(hass, config_entry, "on")
 
-    for _, form in (await _shown_forms(hass, config_entry)).values():
-        schema = {str(key): value for key, value in form["data_schema"].schema.items()}
-        assert isinstance(schema["switch_entity"], EntitySelector)
-        assert schema["switch_entity"].config["filter"] == [{"domain": ["switch"]}]
-        assert schema["grid_power_entity"].config["filter"] == [{"domain": ["sensor"], "device_class": ["power"]}]
+    form = await FORM_OPENERS[step_id](hass, config_entry)
+
+    schema = {str(key): value for key, value in form["data_schema"].schema.items()}
+    assert isinstance(schema["switch_entity"], EntitySelector)
+    assert schema["switch_entity"].config["filter"] == [{"domain": ["switch"]}]
+    assert schema["grid_power_entity"].config["filter"] == [{"domain": ["sensor"], "device_class": ["power"]}]
 
 
 @pytest.mark.asyncio

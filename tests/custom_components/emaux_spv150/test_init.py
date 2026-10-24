@@ -201,3 +201,17 @@ async def test_pump_answering_while_switch_state_is_unknown_is_read(
     await hass.async_block_till_done()
 
     assert config_entry_with_switch.runtime_data.data.current_speed == 1500.0
+
+
+@pytest.mark.asyncio
+async def test_setup_retries_when_no_switch_is_configured_and_pump_silent(
+    hass: HomeAssistant, config_entry, mock_pump_api
+):
+    """Without a power switch nothing explains a silent pump: setup is retried."""
+    mock_pump_api.get_status.side_effect = PumpError("connection refused")
+    config_entry.add_to_hass(hass)
+
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert config_entry.state is ConfigEntryState.SETUP_RETRY
