@@ -74,7 +74,7 @@ Accessibles via **Paramètres > Appareils & Services > Emaux SPV150 > Configurer
 | Paramètre | Description | Défaut |
 |-----------|-------------|--------|
 | Adresse IP | IP de la pompe | — |
-| Switch externe | Prise ou switch qui alimente la pompe : tant qu'il n'est pas allumé, une pompe muette n'est pas une erreur | — |
+| Switch externe | Prise ou switch qui alimente la pompe : tant qu'il est éteint, la pompe n'est pas interrogée | — |
 | Intervalle de polling | 5 à 60 secondes | 30 s |
 | Timeout de requête | Timeout HTTP par requête pompe (1–30 s) | 5 s |
 | Capteur puissance réseau | Capteur de puissance pour le mode solaire | — |
@@ -117,7 +117,8 @@ Identifiants d'entité par défaut sur une nouvelle installation (ils suivent le
 - La pompe est interrogée toutes les 30 s par défaut (5 à 60 s, modifiable à chaud) avec une seule requête HTTP.
 - Après une commande (vitesse, preset, marche/arrêt), la pompe est relue une fois stabilisée (2 s).
 - Un changement d'état du switch externe déclenche une lecture immédiate.
-- Tant que le switch externe n'est pas allumé, la pompe n'est pas censée répondre : ses valeurs sont indisponibles et aucune erreur n'est signalée. Une pompe qui répond est lue quel que soit l'état du switch.
+- Tant que le switch externe est éteint, la pompe n'est pas interrogée : ses valeurs sont indisponibles et aucune erreur n'est signalée.
+- Juste après un redémarrage de Home Assistant, l'état du switch peut rester inconnu une à deux minutes : une pompe qui ne répond pas ne fait alors pas échouer la mise en place. Ensuite, une pompe qui ne répond pas est signalée indisponible, quel que soit l'état du switch.
 
 ## Appareils supportés
 
@@ -133,7 +134,7 @@ Pompes à vitesse variable Emaux SPV150 avec l'interface web Wi-Fi intégrée (s
 
 ## Dépannage
 
-- **« Impossible de se connecter » à la configuration** : vérifiez l'adresse IP, que la pompe est alimentée et sur le même réseau. Si un switch externe est choisi et éteint, le test est sauté.
+- **« Impossible de se connecter » à la configuration** : vérifiez l'adresse IP, que la pompe est alimentée et sur le même réseau. Si le switch externe choisi est éteint, le test est sauté.
 - **Entités indisponibles** : la pompe est hors tension ou ne répond pas. Une erreur est journalisée quand elle cesse de répondre, une ligne quand elle répond à nouveau.
 - **Changement de vitesse refusé** : un seul changement par intervalle de changement de vitesse (60 s par défaut, 0 désactive la limite).
 - **Logs de débogage** : ajoutez dans `configuration.yaml`, puis redémarrez :

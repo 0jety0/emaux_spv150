@@ -74,7 +74,7 @@ Available via **Settings > Devices & Services > Emaux SPV150 > Configure**:
 | Option | Description | Default |
 |--------|-------------|---------|
 | IP address | Pump IP | — |
-| External switch | Plug or switch powering the pump: while it is not on, a silent pump is not an error | — |
+| External switch | Plug or switch powering the pump: while it is off, the pump is not polled | — |
 | Polling interval | 5–60 seconds | 30 s |
 | Request timeout | HTTP timeout per pump request (1–30 s) | 5 s |
 | Grid-power sensor | Power sensor for solar mode | — |
@@ -117,7 +117,8 @@ Default entity IDs on a new installation (they follow the device and entity name
 - The pump is polled every 30 s by default (5–60 s, adjustable at runtime) with a single HTTP request.
 - After a command (speed, preset, run/stop) the pump is read again once it has settled (2 s).
 - A change of the external power switch triggers an immediate read.
-- While the external switch is not on, the pump is not expected to answer: its values show as unavailable and nothing is reported as an error. A pump that answers is read whatever the switch state.
+- While the external switch is off, the pump is not polled: its values show as unavailable and nothing is reported as an error.
+- Right after a Home Assistant restart the switch state can stay unknown for a minute or two: a pump that does not answer then does not fail the setup. Once running, a pump that does not answer is reported as unavailable, whatever the switch state.
 
 ## Supported devices
 
@@ -133,7 +134,7 @@ Emaux SPV150 variable-speed pumps with the built-in Wi-Fi web interface (local C
 
 ## Troubleshooting
 
-- **"Cannot connect" during setup**: check the IP address, that the pump is powered and on the same network. When an external switch is selected and not on, the check is skipped.
+- **"Cannot connect" during setup**: check the IP address, that the pump is powered and on the same network. When the selected external switch is off, the check is skipped.
 - **Entities unavailable**: the pump is powered off or does not answer. One error is logged when it stops answering and one line when it answers again.
 - **Speed change refused**: changes are limited to one per speed-change interval (60 s by default, 0 disables the limit).
 - **Debug logs**: add to `configuration.yaml`, then restart:

@@ -32,7 +32,7 @@ from .const import (
     DEFAULT_STEP_UP,
     DOMAIN,
 )
-from .coordinator import is_pump_expected_on
+from .coordinator import is_switch_off
 
 SWITCH_SELECTOR = EntitySelector(
     EntitySelectorConfig(filter=EntityWithDeviceFilterSelectorConfig(domain=Platform.SWITCH))
@@ -59,10 +59,10 @@ def is_valid_host(host: str) -> bool:
 async def _pump_unreachable(hass: HomeAssistant, host: str, switch_entity_id: str | None) -> bool:
     """Return True when the pump should answer but does not.
 
-    The check is skipped unless the external power switch is ON: a powered-off
+    The check is skipped while the external power switch is OFF: a powered-off
     pump cannot answer, and that must not block saving the configuration.
     """
-    if not is_pump_expected_on(hass, switch_entity_id):
+    if is_switch_off(hass, switch_entity_id):
         return False
     try:
         await PumpAPI(host, async_get_clientsession(hass)).get_status()

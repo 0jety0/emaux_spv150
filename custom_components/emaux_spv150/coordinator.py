@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Any, override
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import CONF_HOST, STATE_OFF, STATE_ON
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
@@ -63,8 +63,8 @@ def is_switch_off(hass: HomeAssistant, entity_id: str | None) -> bool:
 def is_pump_expected_on(hass: HomeAssistant, entity_id: str | None) -> bool:
     """Return True when the pump must answer: no power switch configured, or the switch is ON.
 
-    While the switch state is unknown (a Zigbee plug not restored yet after a
-    restart, or off the network), a silent pump is most likely powered off.
+    Right after a restart a Zigbee plug stays unknown for a minute or two (or its
+    entity does not exist yet): a silent pump is then most likely powered off.
     """
     if not entity_id:
         return True
@@ -124,7 +124,7 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         # Uptime tracking
         self._uptime_start: datetime | None = None
 
-        # True when the pump has no power: switch OFF, or silent while the switch state is unknown
+        # True when the pump has no power: switch OFF, or silent at setup while the switch state is unknown
         self.pump_powered_off: bool = False
 
         super().__init__(
@@ -378,13 +378,10 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         self.config_entry.async_create_background_task(self.hass, self.async_refresh(), "emaux_spv150_switch_refresh")
 
     def _powered_off(self) -> PumpStatus:
-        """Reset the run-time tracking and return the status of a pump without power."""
+        """Stop the uptime and energy tracking and return the status of a pump without power."""
         self.pump_powered_off = True
         self._update_uptime(False)
-        self._pump_started_at = None
-        self._priming_done = True
         self._last_speed_change_time = None
-        self._prev_switch_on = False
         self._last_energy_update = None
         return PumpStatus.zeroed()
 
@@ -397,14 +394,21 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         """Fetch latest pump data and apply solar regulation if active."""
         switch_on = not is_switch_off(self.hass, self.switch_entity_id)
         if not switch_on:
+            # Priming starts again on the next OFF→ON flip of the switch.
+            self._pump_started_at = None
+            self._priming_done = True
+            self._prev_switch_on = False
             return self._powered_off()
 
         self.pump_powered_off = False
         try:
             raw = await self.api_pump.get_status()
         except PumpError as err:
-            if not is_pump_expected_on(self.hass, self.switch_entity_id):
-                _LOGGER.debug("Pump silent while the power switch state is unknown: taken as powered off")
+            # Only at setup: once running, an unknown switch state no longer explains a silent pump.
+            if self.config_entry.state is ConfigEntryState.SETUP_IN_PROGRESS and not is_pump_expected_on(
+                self.hass, self.switch_entity_id
+            ):
+                _LOGGER.debug("Pump silent at setup while the power switch state is unknown: taken as powered off")
                 return self._powered_off()
             # Unknown power during the outage: restart energy integration on the next answer.
             self._last_energy_update = None

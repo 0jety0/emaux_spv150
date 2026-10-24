@@ -10,7 +10,7 @@
         },
         "data_description": {
           "host": "IP address or hostname of the pump on your local network.",
-          "switch_entity": "Smart plug or switch that powers the pump. While it is not on, the pump is not polled and its values show as unavailable.",
+          "switch_entity": "Smart plug or switch that powers the pump. While it is off, the pump is not polled and its values show as unavailable.",
           "grid_power_entity": "Power sensor of your grid connection, positive when importing and negative when exporting. Needed for the solar mode."
         }
       },
@@ -23,7 +23,7 @@
         },
         "data_description": {
           "host": "IP address or hostname of the pump on your local network.",
-          "switch_entity": "Smart plug or switch that powers the pump. While it is not on, the pump is not polled and its values show as unavailable.",
+          "switch_entity": "Smart plug or switch that powers the pump. While it is off, the pump is not polled and its values show as unavailable.",
           "grid_power_entity": "Power sensor of your grid connection, positive when importing and negative when exporting. Needed for the solar mode."
         }
       }
@@ -55,7 +55,7 @@
         },
         "data_description": {
           "host": "IP address or hostname of the pump on your local network.",
-          "switch_entity": "Smart plug or switch that powers the pump. While it is not on, the pump is not polled and its values show as unavailable.",
+          "switch_entity": "Smart plug or switch that powers the pump. While it is off, the pump is not polled and its values show as unavailable.",
           "grid_power_entity": "Power sensor of your grid connection, positive when importing and negative when exporting. Needed for the solar mode.",
           "setpoint": "Grid power the solar mode aims for.",
           "dead_band_lower": "Below this grid power the solar mode speeds the pump up.",

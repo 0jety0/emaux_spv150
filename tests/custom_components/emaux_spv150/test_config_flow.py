@@ -200,10 +200,10 @@ async def test_options_flow_skips_pump_when_switch_off(hass: HomeAssistant, conf
 
 
 @pytest.mark.asyncio
-async def test_options_flow_saves_when_switch_state_is_unknown_and_pump_silent(
+async def test_options_flow_still_checks_the_pump_when_switch_state_is_unknown(
     hass: HomeAssistant, config_entry_with_switch, mock_pump_api
 ):
-    """With the plug's state unknown, a silent pump is taken as powered off and does not block saving."""
+    """Only a switch known to be OFF skips the check: otherwise a mistyped host would be saved silently."""
     await _setup_with_switch(hass, config_entry_with_switch, "unknown")
 
     with _patch_api(side_effect=UNREACHABLE):
@@ -213,7 +213,7 @@ async def test_options_flow_saves_when_switch_state_is_unknown_and_pump_silent(
             user_input={"host": MOCK_HOST, "switch_entity": MOCK_SWITCH, "setpoint": 80},
         )
 
-    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["errors"] == {"base": "cannot_connect"}
 
 
 @pytest.mark.asyncio

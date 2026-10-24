@@ -5,9 +5,10 @@ import pytest
 from aiohttp import ClientError
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import async_fire_time_changed
+from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 
 from custom_components.emaux_spv150.api import PumpError
+from custom_components.emaux_spv150.const import DOMAIN
 from custom_components.emaux_spv150.coordinator import PumpCoordinator
 
 from .conftest import MOCK_HOST, MOCK_STATUS, MOCK_SWITCH
@@ -79,6 +80,10 @@ async def test_setup_retries_when_switch_on_and_pump_unreachable(
     assert config_entry_with_switch.state is ConfigEntryState.SETUP_RETRY
 
 
+def _error_records(caplog) -> list[logging.LogRecord]:
+    return [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+
 async def _next_poll(hass: HomeAssistant, freezer) -> None:
     freezer.tick(timedelta(seconds=30))
     async_fire_time_changed(hass)
@@ -100,17 +105,13 @@ async def test_pump_outage_is_logged_once_until_it_recovers(
     for _ in range(3):
         await _next_poll(hass, freezer)
 
-    assert len([r for r in caplog.records if r.levelno >= logging.ERROR]) == 1
+    assert len(_error_records(caplog)) == 1
 
     aioclient_mock.clear_requests()
     aioclient_mock.get(STATUS_URL, json=MOCK_STATUS)
     await _next_poll(hass, freezer)
 
     assert "recovered" in caplog.text
-
-
-def _error_records(caplog) -> list[logging.LogRecord]:
-    return [r for r in caplog.records if r.levelno >= logging.ERROR]
 
 
 @pytest.mark.asyncio
@@ -146,21 +147,46 @@ async def test_setup_loads_when_switch_entity_is_not_created_yet_and_pump_silent
 
 
 @pytest.mark.asyncio
-async def test_silent_pump_is_not_an_error_when_switch_becomes_unavailable(
+async def test_silent_pump_is_an_outage_once_running_even_if_switch_state_is_unknown(
     hass: HomeAssistant, config_entry_with_switch, mock_pump_api, caplog
 ):
-    """A Zigbee plug dropping off the network must not turn a powered-off pump into a failure."""
+    """After setup an unknown switch state proves nothing: a silent pump is reported, once."""
     hass.states.async_set(MOCK_SWITCH, "on")
     config_entry_with_switch.add_to_hass(hass)
     await hass.config_entries.async_setup(config_entry_with_switch.entry_id)
     await hass.async_block_till_done()
+    reads_before = mock_pump_api.get_status.await_count
 
     mock_pump_api.get_status.side_effect = PumpError("connection refused")
     hass.states.async_set(MOCK_SWITCH, "unavailable")
     await hass.async_block_till_done()
 
-    assert config_entry_with_switch.runtime_data.last_update_success
-    assert _error_records(caplog) == []
+    assert mock_pump_api.get_status.await_count == reads_before + 1
+    assert not config_entry_with_switch.runtime_data.last_update_success
+    assert len(_error_records(caplog)) == 1
+
+
+@pytest.mark.asyncio
+async def test_unknown_switch_at_setup_does_not_start_priming_when_it_reports_on(hass: HomeAssistant, mock_pump_api):
+    """A pump silent at setup was not proven off: the switch reporting ON later must not pause the solar mode."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"host": MOCK_HOST, "switch_entity": MOCK_SWITCH, "grid_power_entity": "sensor.grid_power"},
+        options={"control_mode": "solar"},
+        unique_id=MOCK_HOST,
+    )
+    hass.states.async_set(MOCK_SWITCH, "unknown")
+    mock_pump_api.get_status.side_effect = PumpError("connection refused")
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    mock_pump_api.get_status.side_effect = None
+    hass.states.async_set("sensor.grid_power", "-2000")  # exporting: the solar mode speeds up
+    hass.states.async_set(MOCK_SWITCH, "on")
+    await hass.async_block_till_done()
+
+    mock_pump_api.set_key.assert_awaited_once()
 
 
 @pytest.mark.asyncio
