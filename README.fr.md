@@ -118,7 +118,7 @@ Identifiants d'entité par défaut sur une nouvelle installation (ils suivent le
 - Après une commande (vitesse, preset, marche/arrêt), la pompe est relue une fois stabilisée (2 s).
 - Un changement d'état du switch externe déclenche une lecture immédiate.
 - Tant que le switch externe est éteint, la pompe n'est pas interrogée : ses valeurs sont indisponibles et aucune erreur n'est signalée.
-- Juste après un redémarrage de Home Assistant, l'état du switch peut rester inconnu une à deux minutes : une pompe qui ne répond pas ne fait alors pas échouer la mise en place. Ensuite, une pompe qui ne répond pas est signalée indisponible, quel que soit l'état du switch.
+- Juste après un redémarrage de Home Assistant, l'état du switch reste inconnu une à deux minutes : tant que le switch n'a rien remonté, une pompe qui ne répond pas n'est pas une erreur. Quand le switch est allumé ou indisponible, une pompe qui ne répond pas est signalée (une ligne de log, valeurs indisponibles).
 
 ## Appareils supportés
 

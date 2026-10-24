@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.3.1] — 2026-10-24
+
+### Fixed
+
+- **Error logged at every restart**: right after a restart the smart plug's state stays unknown for a minute or two, also after the integration is set up. A powered-off pump no longer logs an error during that time. An unavailable plug still reports a silent pump.
+
 ## [2.3.0] — 2026-10-24
 
 Requires **Home Assistant 2026.10** or later (Python 3.14).
