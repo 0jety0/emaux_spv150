@@ -17,7 +17,7 @@ Custom Home Assistant integration to control and monitor the **Emaux SPV150** va
 ## Features
 
 ### Monitoring
-- Power draw (W) and flow rate (GPM) in real time
+- Power draw (W) and flow rate (shown in L/min) in real time
 - Cumulated energy (kWh) — compatible with the HA Energy dashboard
 - Uptime since the last start
 
@@ -29,7 +29,7 @@ Custom Home Assistant integration to control and monitor the **Emaux SPV150** va
 
 ### Solar mode — P-controller with dead band
 - Mode selector: `Off` / `Manual` / `Solar` — **persisted across restarts**
-- Configurable grid-power entity (any HA entity, e.g. `sensor.grid_power`)
+- Grid-power sensor (a `power` sensor, positive when importing, negative when exporting)
 - **Proportional (P) controller** centred on a configurable setpoint:
   - `error = |grid_power - setpoint|`
   - `step = min(step_max, max(10 W, error))` — proportional to the delta, capped
@@ -37,10 +37,12 @@ Custom Home Assistant integration to control and monitor the **Emaux SPV150** va
   - Above the upper bound → speed down
   - Inside the dead band → no action
 - Regulation is active immediately if the pump is already running when switching to solar mode
-- Stale-data protection: if the grid value has not changed for more than 60 s, regulation is suspended
+- Stale-data protection: if the grid sensor has not reported for more than 60 s, regulation is suspended
 - All parameters (setpoint, dead band, steps, mode, min/max speeds) **persisted across restarts**
 
 ## Installation
+
+Requires Home Assistant 2026.10 or later.
 
 ### Via HACS (recommended)
 
@@ -61,7 +63,7 @@ Custom Home Assistant integration to control and monitor the **Emaux SPV150** va
 1. **Settings > Devices & Services > Add integration**
 2. Search for `emaux_spv150`
 3. Enter the pump's IP address
-4. (optional) Select an external switch to pause polling when the pump is powered off
+4. (optional) Pick the smart plug or switch that powers the pump, and the grid-power sensor for the solar mode
 
 The pump is tested (HTTP ping) before validation. The same IP cannot be added twice.
 
@@ -72,10 +74,10 @@ Available via **Settings > Devices & Services > Emaux SPV150 > Configure**:
 | Option | Description | Default |
 |--------|-------------|---------|
 | IP address | Pump IP | — |
-| External switch | Entity used to pause polling | — |
+| External switch | Plug or switch powering the pump: while it is not on, a silent pump is not an error | — |
 | Polling interval | 5–60 seconds | 30 s |
 | Request timeout | HTTP timeout per pump request (1–30 s) | 5 s |
-| Grid-power entity | HA sensor for solar mode | — |
+| Grid-power sensor | Power sensor for solar mode | — |
 | Setpoint (W) | Target grid power for the P-controller | 0 W |
 | Dead-band lower bound (W) | Below this: speed up | 0 W |
 | Dead-band upper bound (W) | Above this: slow down | 100 W |
@@ -86,40 +88,82 @@ Available via **Settings > Devices & Services > Emaux SPV150 > Configure**:
 
 ## Created entities
 
+Default entity IDs on a new installation (they follow the device and entity names):
+
 | Entity | Type | Description |
 |--------|------|-------------|
-| `sensor.power` | Sensor | Power draw (W) |
-| `sensor.flow_rate` | Sensor | Flow rate (GPM) |
-| `sensor.energy` | Sensor | Cumulated energy (kWh) |
-| `sensor.uptime` | Sensor | Uptime (h) |
-| `number.speed` | Number | Current speed (RPM) — slider |
-| `number.speed_preset` | Number | Speed preset (1/2/3) — slider |
-| `number.setpoint` | Number | Controller setpoint (W) |
-| `number.dead_band_lower` | Number | Dead-band lower bound (W) |
-| `number.dead_band_upper` | Number | Dead-band upper bound (W) |
-| `number.step_up` | Number | Max step up (RPM) |
-| `number.step_down` | Number | Max step down (RPM) |
-| `number.rpm_min_solar` | Number | Min speed in solar mode (RPM) |
-| `number.rpm_max_solar` | Number | Max speed in solar mode (RPM) |
-| `number.poll_interval` | Number | Polling interval (s) |
-| `number.request_timeout` | Number | HTTP request timeout (s) |
-| `switch.running` | Switch | Start / stop the pump |
-| `select.control_mode` | Select | Off / Manual / Solar |
+| `sensor.emaux_spv150_power` | Sensor | Power draw (W) |
+| `sensor.emaux_spv150_flow_rate` | Sensor | Flow rate (shown in L/min) |
+| `sensor.emaux_spv150_energy` | Sensor | Cumulated energy (kWh) |
+| `sensor.emaux_spv150_uptime` | Sensor | Uptime (h) — diagnostic |
+| `number.emaux_spv150_speed` | Number | Current speed (RPM) — slider |
+| `number.emaux_spv150_speed_preset` | Number | Speed preset (1/2/3) — slider |
+| `number.emaux_spv150_setpoint` | Number | Controller setpoint (W) |
+| `number.emaux_spv150_dead_band_lower_bound` | Number | Dead-band lower bound (W) |
+| `number.emaux_spv150_dead_band_upper_bound` | Number | Dead-band upper bound (W) |
+| `number.emaux_spv150_max_speed_increase_step` | Number | Max step up (RPM) |
+| `number.emaux_spv150_max_speed_decrease_step` | Number | Max step down (RPM) |
+| `number.emaux_spv150_min_speed_solar` | Number | Min speed in solar mode (RPM) |
+| `number.emaux_spv150_max_speed_solar` | Number | Max speed in solar mode (RPM) |
+| `number.emaux_spv150_polling_interval` | Number | Polling interval (s) |
+| `number.emaux_spv150_request_timeout` | Number | HTTP request timeout (s) |
+| `switch.emaux_spv150_running` | Switch | Start / stop the pump |
+| `select.emaux_spv150_control_mode` | Select | Off / Manual / Solar |
 
 ![image info](/img/page_web.jpeg)
 
+## How data is updated
+
+- The pump is polled every 30 s by default (5–60 s, adjustable at runtime) with a single HTTP request.
+- After a command (speed, preset, run/stop) the pump is read again once it has settled (2 s).
+- A change of the external power switch triggers an immediate read.
+- While the external switch is not on, the pump is not expected to answer: its values show as unavailable and nothing is reported as an error. A pump that answers is read whatever the switch state.
+
+## Supported devices
+
+Emaux SPV150 variable-speed pumps with the built-in Wi-Fi web interface (local CGI server). Other Emaux models have not been tested.
+
+## Known limitations
+
+- The pump's web interface has no authentication and uses plain HTTP: keep it on a trusted local network.
+- One pump per Home Assistant instance: entity unique IDs are not yet prefixed per config entry.
+- The `Off` mode only disables the solar regulation; it does not stop the pump (use the run/stop switch).
+- Energy is computed by the integration from the power read at each poll, so it is an estimate.
+- The priming wait only applies when the external switch turns the pump on, not after a Home Assistant restart.
+
+## Troubleshooting
+
+- **"Cannot connect" during setup**: check the IP address, that the pump is powered and on the same network. When an external switch is selected and not on, the check is skipped.
+- **Entities unavailable**: the pump is powered off or does not answer. One error is logged when it stops answering and one line when it answers again.
+- **Speed change refused**: changes are limited to one per speed-change interval (60 s by default, 0 disables the limit).
+- **Debug logs**: add to `configuration.yaml`, then restart:
+
+  ```yaml
+  logger:
+    logs:
+      custom_components.emaux_spv150: debug
+  ```
+
+- **Diagnostics**: **Settings > Devices & Services > Emaux SPV150 > ⋮ > Download diagnostics** (the pump address is removed). Attach the file to an issue.
+
+## Removal
+
+1. **Settings > Devices & Services > Emaux SPV150 > ⋮ > Delete**.
+2. In HACS, open the integration and choose **Remove** (manual install: delete `config/custom_components/emaux_spv150`).
+3. Restart Home Assistant.
+
 ## Development
 
-Tooling: [uv](https://docs.astral.sh/uv/) (environment & dependencies) and [ruff](https://docs.astral.sh/ruff/) (lint + format).
+Tooling: [mise](https://mise.jdx.dev/) (tool versions and tasks), [uv](https://docs.astral.sh/uv/) (environment & dependencies), [ruff](https://docs.astral.sh/ruff/) (lint + format) and [mypy](https://mypy.readthedocs.io/) in strict mode, as in Home Assistant core.
 
 ```bash
-uv sync                 # venv + dev dependencies (from uv.lock)
-uv run ruff check .     # lint
-uv run ruff format .    # format
-uv run pytest -q        # tests
+mise run install        # venv + dev dependencies (from uv.lock)
+mise run lint           # ruff check + ruff format --check
+mise run typecheck      # mypy --strict
+mise run test           # pytest
 ```
 
-CI (GitHub Actions) runs `ruff check`, `ruff format --check` and `pytest`, in addition to `hassfest` and HACS validation.
+CI (GitHub Actions) runs the same lint, type check and tests, in addition to `hassfest` and HACS validation.
 
 ## License
 
