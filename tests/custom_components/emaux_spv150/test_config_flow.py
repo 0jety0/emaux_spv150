@@ -204,6 +204,23 @@ async def test_options_flow_skips_pump_when_switch_off(hass: HomeAssistant, conf
 
 
 @pytest.mark.asyncio
+async def test_options_flow_saves_when_switch_state_is_unknown_and_pump_silent(
+    hass: HomeAssistant, config_entry_with_switch, mock_pump_api
+):
+    """With the plug's state unknown, a silent pump is taken as powered off and does not block saving."""
+    await _setup_with_switch(hass, config_entry_with_switch, "unknown")
+
+    with _patch_api(side_effect=UNREACHABLE):
+        result = await hass.config_entries.options.async_init(config_entry_with_switch.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            user_input={"host": MOCK_HOST, "switch_entity": MOCK_SWITCH, "setpoint": 80},
+        )
+
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+
+
+@pytest.mark.asyncio
 async def test_options_flow_cannot_connect_when_switch_on(hass: HomeAssistant, config_entry_with_switch, mock_pump_api):
     """With the switch ON, an unreachable pump still blocks the options with cannot_connect."""
     await _setup_with_switch(hass, config_entry_with_switch, "on")

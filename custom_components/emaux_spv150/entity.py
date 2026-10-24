@@ -22,5 +22,5 @@ class PumpBaseEntity(CoordinatorEntity[PumpCoordinator]):
 
     @property
     def available(self) -> bool:
-        """Return False when the external switch is OFF or the last update failed."""
-        return self.coordinator.last_update_success and not self.coordinator.pump_switch_off
+        """Return False when the pump has no power or the last update failed."""
+        return self.coordinator.last_update_success and not self.coordinator.pump_powered_off

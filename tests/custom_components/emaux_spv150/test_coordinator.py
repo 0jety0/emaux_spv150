@@ -73,7 +73,7 @@ async def test_update_data_switch_off(hass: HomeAssistant, config_entry_with_swi
 
     assert data.current_watts == 0.0
     assert data.running is False
-    assert coordinator.pump_switch_off is True
+    assert coordinator.pump_powered_off is True
     mock_pump_api.get_status.assert_not_called()
 
 
