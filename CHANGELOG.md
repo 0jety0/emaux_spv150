@@ -1,5 +1,18 @@
 # Changelog
 
+All notable changes to this integration. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
+and versions follow [Semantic Versioning](https://semver.org/).
+
+## [Unreleased]
+
+### Changed
+
+- README (English and French) rewritten: how the solar mode works, with a chart computed from the regulator code,
+  My Home Assistant buttons, automation examples.
+- Issue forms (bug report with diagnostics, feature request) and Dependabot for GitHub Actions and the uv lock file.
+- Workflows: read-only token, hassfest and HACS validation no longer run twice on pull requests.
+- Single license file: PolyForm Noncommercial 1.0.0 (the stale MIT `LICENCE` file is removed).
+
 ## [2.3.2] — 2026-10-24
 
 ### Fixed

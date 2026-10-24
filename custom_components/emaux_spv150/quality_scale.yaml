@@ -69,9 +69,7 @@ rules:
     status: todo
     comment: Depends on discovery.
   docs-data-update: done
-  docs-examples:
-    status: todo
-    comment: No automation examples yet.
+  docs-examples: done
   docs-known-limitations: done
   docs-supported-devices: done
   docs-supported-functions: done
