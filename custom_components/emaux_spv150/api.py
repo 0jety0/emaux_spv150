@@ -3,7 +3,7 @@ import logging
 from typing import Any
 from urllib.parse import quote
 
-from aiohttp import ClientError, ClientSession, ClientTimeout
+from aiohttp import ClientError, ClientResponseError, ClientSession, ClientTimeout
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,15 +34,19 @@ class PumpAPI:
 
         Raises PumpError on any transport or decoding error. Logging is left to
         the caller (the coordinator logs an outage once, not on every poll). The
-        pump IP is never put in the error, only in DEBUG, to avoid leaking LAN topology.
+        pump address is kept out of the error (aiohttp puts host:port in its
+        messages) and only logged in DEBUG, to avoid leaking the LAN layout.
         """
         _LOGGER.debug("Requesting %s", url)
         try:
             async with self._session.get(url, timeout=self._timeout) as response:
                 response.raise_for_status()
                 payload = json.loads(await response.text())
+        except ClientResponseError as err:
+            raise PumpError(f"Pump answered HTTP {err.status}") from err
         except ClientError as err:
-            raise PumpError(f"Pump request failed: {err}") from err
+            _LOGGER.debug("Request failed: %s", err)
+            raise PumpError(f"Pump request failed: {type(err).__name__}") from err
         except TimeoutError as err:
             raise PumpError(f"Pump request timed out after {self._timeout.total:g}s") from err
         except (json.JSONDecodeError, UnicodeDecodeError) as err:

@@ -3,7 +3,10 @@
 from unittest.mock import MagicMock
 
 import pytest
-from aiohttp import ClientError
+from aiohttp import ClientConnectorError, ClientError, ClientResponseError, RequestInfo
+from aiohttp.client_reqrep import ConnectionKey
+from multidict import CIMultiDict, CIMultiDictProxy
+from yarl import URL
 
 from custom_components.emaux_spv150.api import PumpAPI, PumpError
 
@@ -46,7 +49,7 @@ async def test_get_status_success():
 @pytest.mark.asyncio
 async def test_get_status_client_error_raises():
     api = PumpAPI("192.168.1.50", _session(enter_exc=ClientError("connection refused")))
-    with pytest.raises(PumpError, match="connection refused"):
+    with pytest.raises(PumpError, match="Pump request failed: ClientError"):
         await api.get_status()
 
 
@@ -115,3 +118,26 @@ async def test_get_status_undecodable_body_raises():
     api = PumpAPI("192.168.1.50", session)
     with pytest.raises(PumpError, match="unreadable"):
         await api.get_status()
+
+
+def _connector_error() -> ClientConnectorError:
+    key = ConnectionKey("192.168.1.50", 80, False, True, None, None, None)
+    return ClientConnectorError(key, OSError(113, "No route to host"))
+
+
+def _http_error() -> ClientResponseError:
+    url = URL("http://192.168.1.50/cgi-bin/EpvCgi")
+    request = RequestInfo(url, "GET", CIMultiDictProxy(CIMultiDict()), url)
+    return ClientResponseError(request, (), status=500, message="Internal Server Error")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error", [_connector_error(), _http_error()], ids=["connect", "http"])
+async def test_errors_never_carry_the_pump_address(error):
+    """aiohttp messages contain host:port; the error shown in the UI and logs must not reveal the LAN layout."""
+    api = PumpAPI("192.168.1.50", _session(enter_exc=error))
+
+    with pytest.raises(PumpError) as exc_info:
+        await api.get_status()
+
+    assert "192.168.1.50" not in str(exc_info.value)
