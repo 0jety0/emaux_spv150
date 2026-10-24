@@ -11,7 +11,7 @@ and versions follow [Semantic Versioning](https://semver.org/).
   My Home Assistant buttons, automation examples.
 - Issue forms (bug report with diagnostics, feature request) and Dependabot for GitHub Actions and the uv lock file.
 - Workflows: read-only token, hassfest and HACS validation no longer run twice on pull requests.
-- Single license file: PolyForm Noncommercial 1.0.0 (the stale MIT `LICENCE` file is removed).
+- License: MIT, in a single `LICENSE` file (the PolyForm Noncommercial text and the duplicate `LICENCE` file are gone).
 
 ## [2.3.2] — 2026-10-24
 

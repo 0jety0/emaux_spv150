@@ -7,7 +7,7 @@
 [![HACS installs](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.emaux_spv150.total)](https://analytics.home-assistant.io/custom_integrations)
 [![CI](https://github.com/0jety0/emaux_spv150/actions/workflows/ci.yaml/badge.svg)](https://github.com/0jety0/emaux_spv150/actions/workflows/ci.yaml)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![License: PolyForm NC](https://img.shields.io/badge/license-PolyForm%20NC%201.0.0-orange.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 Intégration Home Assistant pour superviser et piloter la pompe de piscine à vitesse variable **Emaux SPV150** sur
 le réseau local, avec un **mode solaire** qui ajuste la vitesse de la pompe au surplus de vos panneaux.
@@ -261,4 +261,4 @@ Les changements sont listés dans le [CHANGELOG](CHANGELOG.md).
 
 ## Licence
 
-[PolyForm Noncommercial 1.0.0](LICENSE) : usage personnel et non commercial. Tout usage commercial nécessite un accord séparé.
+[MIT](LICENSE).
