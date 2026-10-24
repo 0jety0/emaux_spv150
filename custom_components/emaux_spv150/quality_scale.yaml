@@ -8,8 +8,8 @@ rules:
     comment: No custom actions.
   appropriate-polling: done
   brands:
-    status: todo
-    comment: Local brand/ icons for Home Assistant 2026.3+ come with PR #5.
+    status: done
+    comment: Local brand/ icons (Home Assistant 2026.3+), added by PR #5.
   common-modules: done
   config-flow:
     status: todo
