@@ -5,11 +5,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.emaux_spv150.api import PumpError
 from custom_components.emaux_spv150.const import DOMAIN
 
 MOCK_HOST = "192.168.1.50"
 MOCK_SWITCH = "switch.pool_power"
-UNREACHABLE = {}
+UNREACHABLE = PumpError("connection refused")
 MOCK_STATUS = {
     "CurrentSpeed": "1500",
     "CurrentWatts": "300",
@@ -19,10 +20,12 @@ MOCK_STATUS = {
 }
 
 
-def _patch_api(return_value=MOCK_STATUS):
+def _patch_api(**get_status):
+    """Patch the pump client; get_status answers MOCK_STATUS unless given return_value or side_effect."""
+    get_status.setdefault("return_value", MOCK_STATUS)
     return patch(
         "custom_components.emaux_spv150.config_flow.PumpAPI",
-        return_value=AsyncMock(get_status=AsyncMock(return_value=return_value)),
+        return_value=AsyncMock(get_status=AsyncMock(**get_status)),
     )
 
 
@@ -59,7 +62,7 @@ async def test_user_step_success(hass: HomeAssistant):
 @pytest.mark.asyncio
 async def test_user_step_cannot_connect(hass: HomeAssistant):
     """An unreachable host should surface the cannot_connect error."""
-    with _patch_api(return_value={}):
+    with _patch_api(side_effect=UNREACHABLE):
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
@@ -150,7 +153,7 @@ async def test_user_step_skips_pump_when_switch_off(hass: HomeAssistant):
     """With the given switch OFF, the entry is created without contacting the pump."""
     hass.states.async_set(MOCK_SWITCH, "off")
     with (
-        _patch_api(return_value=UNREACHABLE) as api_cls,
+        _patch_api(side_effect=UNREACHABLE) as api_cls,
         patch("custom_components.emaux_spv150.async_setup_entry", return_value=True),
     ):
         result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
@@ -170,7 +173,7 @@ async def test_reconfigure_skips_pump_when_switch_off(hass: HomeAssistant, confi
     await _setup_with_switch(hass, config_entry_with_switch, "off")
 
     new_host = "192.168.1.77"
-    with _patch_api(return_value=UNREACHABLE) as api_cls:
+    with _patch_api(side_effect=UNREACHABLE) as api_cls:
         result = await config_entry_with_switch.start_reconfigure_flow(hass)
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
@@ -188,7 +191,7 @@ async def test_options_flow_skips_pump_when_switch_off(hass: HomeAssistant, conf
     """With the switch OFF, options are saved without contacting the pump."""
     await _setup_with_switch(hass, config_entry_with_switch, "off")
 
-    with _patch_api(return_value=UNREACHABLE) as api_cls:
+    with _patch_api(side_effect=UNREACHABLE) as api_cls:
         result = await hass.config_entries.options.async_init(config_entry_with_switch.entry_id)
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
@@ -205,7 +208,7 @@ async def test_options_flow_cannot_connect_when_switch_on(hass: HomeAssistant, c
     """With the switch ON, an unreachable pump still blocks the options with cannot_connect."""
     await _setup_with_switch(hass, config_entry_with_switch, "on")
 
-    with _patch_api(return_value=UNREACHABLE):
+    with _patch_api(side_effect=UNREACHABLE):
         result = await hass.config_entries.options.async_init(config_entry_with_switch.entry_id)
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],

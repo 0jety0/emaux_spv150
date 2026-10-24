@@ -4,9 +4,8 @@ from unittest.mock import MagicMock
 
 import pytest
 from aiohttp import ClientError
-from homeassistant.exceptions import HomeAssistantError
 
-from custom_components.emaux_spv150.api import PumpAPI
+from custom_components.emaux_spv150.api import PumpAPI, PumpError
 
 
 class _FakeResponse:
@@ -45,21 +44,32 @@ async def test_get_status_success():
 
 
 @pytest.mark.asyncio
-async def test_get_status_client_error_returns_empty():
+async def test_get_status_client_error_raises():
     api = PumpAPI("192.168.1.50", _session(enter_exc=ClientError("connection refused")))
-    assert await api.get_status() == {}
+    with pytest.raises(PumpError, match="connection refused"):
+        await api.get_status()
 
 
 @pytest.mark.asyncio
-async def test_get_status_timeout_returns_empty():
-    api = PumpAPI("192.168.1.50", _session(enter_exc=TimeoutError()))
-    assert await api.get_status() == {}
+async def test_get_status_timeout_raises():
+    api = PumpAPI("192.168.1.50", _session(enter_exc=TimeoutError()), timeout=7)
+    with pytest.raises(PumpError, match="timed out after 7s"):
+        await api.get_status()
 
 
 @pytest.mark.asyncio
-async def test_get_status_invalid_json_returns_empty():
+async def test_get_status_invalid_json_raises():
     api = PumpAPI("192.168.1.50", _session("<html>500 error</html>"))
-    assert await api.get_status() == {}
+    with pytest.raises(PumpError, match="unreadable"):
+        await api.get_status()
+
+
+@pytest.mark.asyncio
+async def test_get_status_empty_object_raises():
+    """An empty status carries no reading: it is a failure, not a pump with every value unknown."""
+    api = PumpAPI("192.168.1.50", _session("{}"))
+    with pytest.raises(PumpError, match="empty status"):
+        await api.get_status()
 
 
 @pytest.mark.asyncio
@@ -71,7 +81,7 @@ async def test_set_key_success():
 @pytest.mark.asyncio
 async def test_set_key_not_acknowledged_raises():
     api = PumpAPI("192.168.1.50", _session("{}"))
-    with pytest.raises(HomeAssistantError, match="did not acknowledge"):
+    with pytest.raises(PumpError, match="did not acknowledge"):
         await api.set_key("SetCurrentSpeed", 1800)
 
 
@@ -88,18 +98,20 @@ async def test_set_key_url_is_encoded():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("payload", ["[1, 2]", "null", '"busy"'])
-async def test_get_status_non_object_json_returns_empty(payload):
-    """Valid JSON that is not an object must be treated as no data, not crash the poll."""
+async def test_get_status_non_object_json_raises(payload):
+    """Valid JSON that is not an object is a failure, not a crash of the poll."""
     api = PumpAPI("192.168.1.50", _session(payload))
-    assert await api.get_status() == {}
+    with pytest.raises(PumpError, match="not an object"):
+        await api.get_status()
 
 
 @pytest.mark.asyncio
-async def test_get_status_undecodable_body_returns_empty():
-    """A body that is not valid text must be treated as no data, not crash the poll."""
+async def test_get_status_undecodable_body_raises():
+    """A body that is not valid text is a failure, not a crash of the poll."""
     response = _FakeResponse()
     response.text = MagicMock(side_effect=UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte"))
     session = MagicMock()
     session.get = MagicMock(return_value=response)
     api = PumpAPI("192.168.1.50", session)
-    assert await api.get_status() == {}
+    with pytest.raises(PumpError, match="unreadable"):
+        await api.get_status()

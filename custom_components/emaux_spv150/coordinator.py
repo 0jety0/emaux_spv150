@@ -11,7 +11,7 @@ from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .api import PumpAPI
+from .api import PumpAPI, PumpError
 from .const import (
     COMMAND_SETTLE_DELAY,
     CONF_DEAD_BAND_LOWER,
@@ -38,6 +38,7 @@ from .const import (
     DEFAULT_SPEED_CHANGE_INTERVAL,
     DEFAULT_STEP_DOWN,
     DEFAULT_STEP_UP,
+    DOMAIN,
     GRID_POWER_STALENESS_SECONDS,
 )
 from .models import PumpStatus, to_float
@@ -249,7 +250,14 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
                         self.speed_change_interval - elapsed,
                     )
                     return None
-        result = await self.api_pump.set_key(key, value)
+        try:
+            result = await self.api_pump.set_key(key, value)
+        except PumpError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="command_failed",
+                translation_placeholders={"command": key, "error": str(err)},
+            ) from err
         if key == "SetCurrentSpeed":
             # Armed only once the pump accepted the change, so a failure does not block the retry.
             self._last_speed_change_time = dt_util.utcnow()
@@ -374,11 +382,16 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
             return PumpStatus.zeroed()
 
         self.pump_switch_off = False
-        raw = await self.api_pump.get_status()
-        if not raw:
+        try:
+            raw = await self.api_pump.get_status()
+        except PumpError as err:
             # Unknown power during the outage: restart energy integration on the next answer.
             self._last_energy_update = None
-            raise UpdateFailed("Pump did not respond or returned empty data")
+            raise UpdateFailed(
+                translation_domain=DOMAIN,
+                translation_key="update_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
 
         status = PumpStatus.from_raw(raw)
         self._update_uptime(status.running)

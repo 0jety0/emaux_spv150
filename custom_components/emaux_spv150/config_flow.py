@@ -9,7 +9,7 @@ from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import PumpAPI
+from .api import PumpAPI, PumpError
 from .const import (
     CONF_DEAD_BAND_LOWER,
     CONF_DEAD_BAND_UPPER,
@@ -55,7 +55,11 @@ async def _pump_unreachable(hass: HomeAssistant, host: str, switch_entity_id: st
     """
     if is_switch_off(hass, switch_entity_id):
         return False
-    return not await PumpAPI(host, async_get_clientsession(hass)).get_status()
+    try:
+        await PumpAPI(host, async_get_clientsession(hass)).get_status()
+    except PumpError:
+        return True
+    return False
 
 
 class EmauxSpv150ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):

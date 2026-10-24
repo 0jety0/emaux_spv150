@@ -7,6 +7,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from homeassistant.util import dt as dt_util
 
+from custom_components.emaux_spv150.api import PumpError
 from custom_components.emaux_spv150.coordinator import PumpCoordinator
 
 MOCK_STATUS = {
@@ -47,16 +48,17 @@ async def test_running_status_normalised_from_int(hass: HomeAssistant, config_en
 
 
 @pytest.mark.asyncio
-async def test_update_data_empty_raises(hass: HomeAssistant, config_entry):
-    """An empty API response should raise UpdateFailed."""
+async def test_update_data_pump_error_raises(hass: HomeAssistant, config_entry, mock_pump_api):
+    """A pump that cannot be read makes the poll fail with a translated message."""
     config_entry.add_to_hass(hass)
     coordinator = PumpCoordinator(hass, config_entry)
+    mock_pump_api.get_status = AsyncMock(side_effect=PumpError("connection refused"))
 
-    empty_api = AsyncMock()
-    empty_api.get_status = AsyncMock(return_value={})
-
-    with patch.object(coordinator, "api_pump", empty_api), pytest.raises(UpdateFailed):
+    with patch.object(coordinator, "api_pump", mock_pump_api), pytest.raises(UpdateFailed) as exc_info:
         await coordinator._async_update_data()
+
+    assert exc_info.value.translation_key == "update_failed"
+    assert exc_info.value.translation_placeholders == {"error": "connection refused"}
 
 
 @pytest.mark.asyncio
@@ -196,11 +198,11 @@ async def test_energy_not_counted_across_failed_polls(hass: HomeAssistant, confi
 
     with patch.object(coordinator, "api_pump", mock_pump_api):
         await coordinator._async_update_data()
-        mock_pump_api.get_status.return_value = {}
+        mock_pump_api.get_status.side_effect = PumpError("connection refused")
         with pytest.raises(UpdateFailed):
             await coordinator._async_update_data()
         freezer.tick(timedelta(hours=12))
-        mock_pump_api.get_status.return_value = {**MOCK_STATUS, "CurrentWatts": "1000"}
+        mock_pump_api.get_status.side_effect = None
         await coordinator._async_update_data()
 
     assert coordinator.energy_kwh == 0.0
@@ -288,7 +290,7 @@ async def test_failed_solar_command_keeps_the_poll_result(hass: HomeAssistant, c
     coordinator.control_mode = "solar"
     coordinator.grid_power_entity = "sensor.grid_power"
     hass.states.async_set("sensor.grid_power", "-2000")  # exporting: regulator speeds up
-    mock_pump_api.set_key = AsyncMock(side_effect=HomeAssistantError("pump refused"))
+    mock_pump_api.set_key = AsyncMock(side_effect=PumpError("pump refused"))
 
     with patch.object(coordinator, "api_pump", mock_pump_api):
         data = await coordinator._async_update_data()
@@ -303,7 +305,7 @@ async def test_failed_speed_command_does_not_arm_the_throttle(hass: HomeAssistan
     config_entry.add_to_hass(hass)
     coordinator = PumpCoordinator(hass, config_entry)
     coordinator.speed_change_interval = 60
-    mock_pump_api.set_key = AsyncMock(side_effect=[HomeAssistantError("pump refused"), "1800"])
+    mock_pump_api.set_key = AsyncMock(side_effect=[PumpError("pump refused"), "1800"])
 
     with patch.object(coordinator, "api_pump", mock_pump_api):
         with pytest.raises(HomeAssistantError):
