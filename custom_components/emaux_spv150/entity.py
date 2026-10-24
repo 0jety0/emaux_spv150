@@ -10,11 +10,10 @@ class PumpBaseEntity(CoordinatorEntity[PumpCoordinator]):
 
     _attr_has_entity_name = True
 
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information for grouping entities under a single device."""
-        return DeviceInfo(
-            identifiers={(DOMAIN, self.coordinator.config_entry.entry_id)},
+    def __init__(self, coordinator: PumpCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.config_entry.entry_id)},
             name="Emaux SPV150",
             manufacturer="Emaux",
             model="SPV150",

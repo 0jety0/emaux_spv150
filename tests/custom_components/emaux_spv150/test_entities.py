@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from homeassistant.const import STATE_UNAVAILABLE, EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.icon import async_get_icons
 from homeassistant.util import dt as dt_util
@@ -145,3 +146,16 @@ async def test_every_entity_takes_its_icon_from_icons_json(hass: HomeAssistant, 
     translated = {(platform, key) for platform, keys in icons.items() for key in keys}
     assert {(e.domain, e.translation_key) for e in entries} - translated == set()
     assert [e.entity_id for e in entries if "icon" in hass.states.get(e.entity_id).attributes] == []
+
+
+@pytest.mark.asyncio
+async def test_all_entities_belong_to_one_pump_device(hass: HomeAssistant, config_entry, mock_pump_api):
+    """Every entity is grouped under a single Emaux SPV150 device."""
+    config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    devices = dr.async_entries_for_config_entry(dr.async_get(hass), config_entry.entry_id)
+    entries = er.async_entries_for_config_entry(er.async_get(hass), config_entry.entry_id)
+
+    assert [(d.manufacturer, d.model, d.name) for d in devices] == [("Emaux", "SPV150", "Emaux SPV150")]
+    assert {e.device_id for e in entries} == {devices[0].id}

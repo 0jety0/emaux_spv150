@@ -24,7 +24,8 @@ from .entity import PumpBaseEntity
 
 _LOGGER = logging.getLogger(__name__)
 
-PARALLEL_UPDATES = 1
+# Read-only entities refreshed by the coordinator: no update limit needed.
+PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)

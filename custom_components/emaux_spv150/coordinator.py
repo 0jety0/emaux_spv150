@@ -130,7 +130,7 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         super().__init__(
             hass,
             _LOGGER,
-            name="PumpCoordinator",
+            name=DOMAIN,
             update_interval=timedelta(seconds=poll_interval),
             config_entry=entry,
             # After a command, re-read the pump once it has settled, without blocking the service call.
