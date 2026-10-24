@@ -5,13 +5,13 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.const import STATE_UNAVAILABLE, EntityCategory
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, State
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.icon import async_get_icons
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import async_fire_time_changed
+from pytest_homeassistant_custom_component.common import async_fire_time_changed, mock_restore_cache_with_extra_data
 
 from custom_components.emaux_spv150.const import DOMAIN
 
@@ -180,3 +180,63 @@ async def test_speed_change_within_the_minimum_interval_is_refused_with_a_reason
 
     assert exc_info.value.translation_key == "speed_change_throttled"
     mock_pump_api.set_key.assert_awaited_once_with("SetCurrentSpeed", 1800)
+
+
+async def _setup(hass: HomeAssistant, entry) -> None:
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+
+@pytest.mark.asyncio
+async def test_turning_the_pump_on_sends_run(hass: HomeAssistant, config_entry, mock_pump_api):
+    """The run/stop switch starts the pump with RunStop = 1."""
+    await _setup(hass, config_entry)
+
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": _entity_id(hass, "switch", "running_status")}, blocking=True
+    )
+
+    mock_pump_api.set_key.assert_awaited_once_with("RunStop", 1)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("key", "value"), [("step_up", 200), ("step_down", 50), ("poll_interval", 15)])
+async def test_local_setting_is_shown_and_saved(hass: HomeAssistant, config_entry, mock_pump_api, key, value):
+    """A regulation setting changed from its entity is displayed at once and kept in the entry options."""
+    await _setup(hass, config_entry)
+    entity_id = _entity_id(hass, "number", key)
+
+    await hass.services.async_call("number", "set_value", {"entity_id": entity_id, "value": value}, blocking=True)
+
+    assert float(hass.states.get(entity_id).state) == value
+    assert config_entry.options[key] == value
+
+
+@pytest.mark.asyncio
+async def test_unreadable_saved_energy_restarts_from_zero(hass: HomeAssistant, config_entry, mock_pump_api, caplog):
+    """A corrupt saved energy value is reported and the counter starts from zero instead of failing."""
+    mock_restore_cache_with_extra_data(
+        hass,
+        [(State("sensor.emaux_spv150_energy", "abc"), {"native_value": "abc", "native_unit_of_measurement": "kWh"})],
+    )
+
+    await _setup(hass, config_entry)
+
+    assert float(hass.states.get(_entity_id(hass, "sensor", "energy_kwh")).state) == 0
+    assert "Could not restore energy value: abc" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_switch_attribute_change_does_not_poll_the_pump(
+    hass: HomeAssistant, config_entry_with_switch, mock_pump_api
+):
+    """Only a real on/off change of the power switch triggers an immediate poll."""
+    hass.states.async_set(MOCK_SWITCH, "on")
+    await _setup(hass, config_entry_with_switch)
+    reads_before = mock_pump_api.get_status.await_count
+
+    hass.states.async_set(MOCK_SWITCH, "on", {"power": 12})
+    await hass.async_block_till_done()
+
+    assert mock_pump_api.get_status.await_count == reads_before

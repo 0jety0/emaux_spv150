@@ -360,3 +360,61 @@ async def test_entity_fields_offer_only_matching_entities(hass: HomeAssistant, c
         assert isinstance(schema["switch_entity"], EntitySelector)
         assert schema["switch_entity"].config["filter"] == [{"domain": ["switch"]}]
         assert schema["grid_power_entity"].config["filter"] == [{"domain": ["sensor"], "device_class": ["power"]}]
+
+
+@pytest.mark.asyncio
+async def test_user_step_rejects_a_blank_host(hass: HomeAssistant):
+    """A host made only of spaces is refused before any pump request."""
+    with _patch_api() as api_cls:
+        result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input={"host": "   "})
+
+    assert result["errors"] == {"base": "invalid_host"}
+    api_cls.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("host", "get_status", "error"),
+    [
+        ("not a host!", {"return_value": MOCK_STATUS}, "invalid_host"),
+        ("192.168.1.77", {"side_effect": UNREACHABLE}, "cannot_connect"),
+    ],
+)
+async def test_reconfigure_shows_the_error_and_keeps_the_entry(
+    hass: HomeAssistant, config_entry, mock_pump_api, host, get_status, error
+):
+    """A wrong or silent host is reported on the form and the entry is left untouched."""
+    await _setup_with_switch(hass, config_entry, "on")
+
+    with _patch_api(**get_status):
+        result = await config_entry.start_reconfigure_flow(hass)
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input={"host": host})
+
+    assert result["errors"] == {"base": error}
+    assert config_entry.data["host"] == MOCK_HOST
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("user_input", "errors"),
+    [
+        ({"host": "not a host!"}, {"base": "invalid_host"}),
+        (
+            {"host": MOCK_HOST, "dead_band_lower": 100, "dead_band_upper": 0},
+            {"dead_band_lower": "dead_band_range_invalid"},
+        ),
+    ],
+)
+async def test_options_flow_reports_invalid_values(
+    hass: HomeAssistant, config_entry, mock_pump_api, user_input, errors
+):
+    """Invalid options are reported on the form and nothing is saved."""
+    await _setup_with_switch(hass, config_entry, "on")
+
+    with _patch_api():
+        result = await hass.config_entries.options.async_init(config_entry.entry_id)
+        result = await hass.config_entries.options.async_configure(result["flow_id"], user_input=user_input)
+
+    assert result["errors"] == errors
+    assert config_entry.options == {}

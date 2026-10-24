@@ -48,9 +48,7 @@ _HOSTNAME_RE = re.compile(r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1
 
 def is_valid_host(host: str) -> bool:
     """Return True if host is a valid IP address or hostname."""
-    host = (host or "").strip()
-    if not host:
-        return False
+    host = host.strip()
     try:
         ipaddress.ip_address(host)
         return True

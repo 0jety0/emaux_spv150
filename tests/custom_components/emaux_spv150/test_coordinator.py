@@ -419,3 +419,21 @@ async def test_apply_options_updates_live_params(hass: HomeAssistant, config_ent
 
     assert coordinator.setpoint == 1234.0
     assert coordinator.step_up == 250
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("states", [{}, {"sensor.grid_power": "unavailable"}], ids=["missing", "unavailable"])
+async def test_solar_regulation_waits_for_a_numeric_grid_value(
+    hass: HomeAssistant, config_entry, mock_pump_api, states
+):
+    """A missing or non-numeric grid reading never moves the pump."""
+    config_entry.add_to_hass(hass)
+    coordinator = PumpCoordinator(hass, config_entry)
+    coordinator.grid_power_entity = "sensor.grid_power"
+    for entity_id, state in states.items():
+        hass.states.async_set(entity_id, state)
+
+    with patch.object(coordinator, "api_pump", mock_pump_api):
+        await coordinator._apply_solar_regulation(1500)
+
+    mock_pump_api.set_key.assert_not_called()
