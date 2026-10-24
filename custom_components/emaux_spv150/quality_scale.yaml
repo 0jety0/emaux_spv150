@@ -11,7 +11,12 @@ rules:
     status: todo
     comment: Local brand/ icons for Home Assistant 2026.3+ come with PR #5.
   common-modules: done
-  config-flow: done
+  config-flow:
+    status: todo
+    comment: >-
+      Host, switch and grid entity can also be changed in the options flow
+      (stored in options), duplicating the reconfigure flow; the rule keeps
+      connection settings in data.
   config-flow-test-coverage: done
   dependency-transparency:
     status: exempt
@@ -29,7 +34,11 @@ rules:
     status: exempt
     comment: No custom triggers.
   entity-event-setup: done
-  entity-unique-id: done
+  entity-unique-id:
+    status: todo
+    comment: >-
+      Unique IDs are not prefixed per config entry, so a second pump collides.
+      Fixing it changes every unique ID and needs a registry migration.
   has-entity-name: done
   runtime-data: done
   test-before-configure: done
