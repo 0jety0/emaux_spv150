@@ -2,14 +2,23 @@ name: Validate with hassfest
 
 on:
   push:
+    branches: [main]
   pull_request:
   schedule:
-    - cron:  '0 0 * * *'
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:
-    runs-on: "ubuntu-latest"
+    runs-on: ubuntu-latest
     steps:
-        - uses: "actions/checkout@v7.0.1"
-        # No usable release tag (the only one, 1.0.0, predates hassfest): pinned to master@2026-10-16.
-        - uses: "home-assistant/actions/hassfest@cd6f3635a740c84d8a14f6121a90068b8ece6bf6"
+      - uses: actions/checkout@v7.0.1
+      # No usable release tag (the only one, 1.0.0, predates hassfest): pinned to master@2026-10-16.
+      - uses: home-assistant/actions/hassfest@cd6f3635a740c84d8a14f6121a90068b8ece6bf6

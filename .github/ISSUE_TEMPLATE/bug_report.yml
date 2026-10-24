@@ -1,0 +1,67 @@
+name: Bug report
+description: Something does not work as described in the README.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a problem. Please check the
+        [Troubleshooting](https://github.com/0jety0/emaux_spv150#troubleshooting) section first.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: What you did, what you expected and what you got instead.
+    validations:
+      required: true
+  - type: input
+    id: integration_version
+    attributes:
+      label: Integration version
+      description: Shown in HACS, or in `custom_components/emaux_spv150/manifest.json`.
+      placeholder: "2.3.2"
+    validations:
+      required: true
+  - type: input
+    id: ha_version
+    attributes:
+      label: Home Assistant version
+      description: Settings > About.
+      placeholder: "2026.10.2"
+    validations:
+      required: true
+  - type: dropdown
+    id: control_mode
+    attributes:
+      label: Control mode
+      options:
+        - Manual
+        - Solar
+        - "Off"
+    validations:
+      required: true
+  - type: dropdown
+    id: switch
+    attributes:
+      label: External power switch
+      description: Is a smart plug or switch configured to power the pump?
+      options:
+        - "Yes"
+        - "No"
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: |
+        Settings > Devices & Services > Emaux SPV150 > ⋮ > Download diagnostics (the pump address is removed).
+        Drag the file here.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Lines from Settings > System > Logs mentioning `emaux_spv150`, ideally with debug logs enabled
+        (see the README). Pasted text is formatted as a log block.
+      render: text
