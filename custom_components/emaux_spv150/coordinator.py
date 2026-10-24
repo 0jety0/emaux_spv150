@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import Any, override
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-from homeassistant.const import CONF_HOST, STATE_OFF, STATE_ON
+from homeassistant.const import CONF_HOST, STATE_OFF, STATE_ON, STATE_UNKNOWN
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -58,6 +58,18 @@ def is_switch_off(hass: HomeAssistant, entity_id: str | None) -> bool:
         return False
     state = hass.states.get(entity_id)
     return state is not None and state.state.lower() == STATE_OFF
+
+
+def is_switch_not_reported_yet(hass: HomeAssistant, entity_id: str | None) -> bool:
+    """Return True when a power switch is configured but has reported no state since the restart.
+
+    A Zigbee plug stays unknown for a minute or two after a Home Assistant restart,
+    also after this entry is set up. Unavailable (plug off the network) is not this case.
+    """
+    if not entity_id:
+        return False
+    state = hass.states.get(entity_id)
+    return state is not None and state.state == STATE_UNKNOWN
 
 
 def is_pump_expected_on(hass: HomeAssistant, entity_id: str | None) -> bool:
@@ -128,7 +140,7 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         # Uptime tracking
         self._uptime_start: datetime | None = None
 
-        # True when the pump has no power: switch OFF, or silent at setup while the switch state is unknown
+        # True when the pump has no power: switch OFF, or silent while the switch state is not known
         self.pump_powered_off: bool = False
 
         super().__init__(
@@ -410,11 +422,13 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         try:
             raw = await self.api_pump.get_status()
         except PumpError as err:
-            # Only at setup: once running, an unknown switch state no longer explains a silent pump.
-            if self.config_entry.state is ConfigEntryState.SETUP_IN_PROGRESS and not is_pump_expected_on(
+            # A silent pump is most likely powered off while the switch has reported nothing yet,
+            # and at setup while it is not ON. Unavailable or missing once running is an outage.
+            setting_up = self.config_entry.state is ConfigEntryState.SETUP_IN_PROGRESS
+            if (setting_up and not is_pump_expected_on(self.hass, self.switch_entity_id)) or is_switch_not_reported_yet(
                 self.hass, self.switch_entity_id
             ):
-                _LOGGER.debug("Pump silent at setup while the power switch state is unknown: taken as powered off")
+                _LOGGER.debug("Pump silent while the power switch state is not known: taken as powered off")
                 return self._powered_off()
             # Unknown power during the outage: restart energy integration on the next answer.
             self._last_energy_update = None

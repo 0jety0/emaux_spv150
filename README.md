@@ -118,7 +118,7 @@ Default entity IDs on a new installation (they follow the device and entity name
 - After a command (speed, preset, run/stop) the pump is read again once it has settled (2 s).
 - A change of the external power switch triggers an immediate read.
 - While the external switch is off, the pump is not polled: its values show as unavailable and nothing is reported as an error.
-- Right after a Home Assistant restart the switch state can stay unknown for a minute or two: a pump that does not answer then does not fail the setup. Once running, a pump that does not answer is reported as unavailable, whatever the switch state.
+- Right after a Home Assistant restart the switch state stays unknown for a minute or two: while the switch has reported nothing yet, a pump that does not answer is not an error. When the switch is on or unavailable, a pump that does not answer is reported (logged once, values unavailable).
 
 ## Supported devices
 

@@ -147,10 +147,10 @@ async def test_setup_loads_when_switch_entity_is_not_created_yet_and_pump_silent
 
 
 @pytest.mark.asyncio
-async def test_silent_pump_is_an_outage_once_running_even_if_switch_state_is_unknown(
+async def test_silent_pump_is_an_outage_once_running_if_switch_goes_unavailable(
     hass: HomeAssistant, config_entry_with_switch, mock_pump_api, caplog
 ):
-    """After setup an unknown switch state proves nothing: a silent pump is reported, once."""
+    """A plug that dropped off the network proves nothing: a silent pump is reported, once."""
     hass.states.async_set(MOCK_SWITCH, "on")
     config_entry_with_switch.add_to_hass(hass)
     await hass.config_entries.async_setup(config_entry_with_switch.entry_id)
@@ -164,6 +164,29 @@ async def test_silent_pump_is_an_outage_once_running_even_if_switch_state_is_unk
     assert mock_pump_api.get_status.await_count == reads_before + 1
     assert not config_entry_with_switch.runtime_data.last_update_success
     assert len(_error_records(caplog)) == 1
+
+
+@pytest.mark.asyncio
+async def test_switch_not_reported_yet_after_setup_keeps_a_silent_pump_quiet(
+    hass: HomeAssistant, config_entry_with_switch, mock_pump_api, caplog
+):
+    """Seen in production: after a restart the MQTT plug goes unavailable -> unknown, after setup.
+
+    Unknown means no state received yet since the restart: a silent pump is still not an error.
+    """
+    hass.states.async_set(MOCK_SWITCH, "unavailable")
+    mock_pump_api.get_status.side_effect = PumpError("connection refused")
+    config_entry_with_switch.add_to_hass(hass)
+    await hass.config_entries.async_setup(config_entry_with_switch.entry_id)
+    await hass.async_block_till_done()
+    reads_before = mock_pump_api.get_status.await_count
+
+    hass.states.async_set(MOCK_SWITCH, "unknown")
+    await hass.async_block_till_done()
+
+    assert mock_pump_api.get_status.await_count == reads_before + 1
+    assert config_entry_with_switch.runtime_data.last_update_success
+    assert _error_records(caplog) == []
 
 
 @pytest.mark.asyncio
