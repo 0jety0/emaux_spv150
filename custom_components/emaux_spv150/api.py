@@ -59,12 +59,12 @@ class PumpAPI:
             raise PumpError("Pump returned an empty status")
         return status
 
-    async def set_key(self, key: str, value: int) -> int:
-        """Set a supported pump command key to the given value."""
+    async def set_key(self, key: str, value: int) -> str:
+        """Set a supported pump command key to the given value and return the value the pump echoed."""
         safe_key = quote(str(key), safe="")
         url = f"http://{self._host}/cgi-bin/EpvCgi?name={safe_key}&val={int(value)}&type=set&time=Date.now()"
         json_data = await self._make_request(url)
         result = json_data.get(key)
         if result is None:
             raise PumpError(f"Pump did not acknowledge command '{key}'")
-        return result
+        return str(result)

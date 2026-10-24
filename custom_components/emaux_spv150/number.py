@@ -147,7 +147,7 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
         native_step=1,
         native_unit_of_measurement=UnitOfTime.SECONDS,
         mode=NumberMode.BOX,
-        value_fn=lambda c: float(int(c.update_interval.total_seconds())),
+        value_fn=lambda c: float(c.poll_interval),
         set_fn=lambda c, v: c.set_poll_interval(int(v)),
     ),
     PumpNumberDescription(

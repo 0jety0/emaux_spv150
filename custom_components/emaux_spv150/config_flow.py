@@ -9,7 +9,7 @@ from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.const import CONF_HOST, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.selector import EntityFilterSelectorConfig, EntitySelector, EntitySelectorConfig
+from homeassistant.helpers.selector import EntitySelector, EntitySelectorConfig, EntityWithDeviceFilterSelectorConfig
 
 from .api import PumpAPI, PumpError
 from .const import (
@@ -34,10 +34,12 @@ from .const import (
 )
 from .coordinator import is_pump_expected_on
 
-SWITCH_SELECTOR = EntitySelector(EntitySelectorConfig(filter=EntityFilterSelectorConfig(domain=Platform.SWITCH)))
+SWITCH_SELECTOR = EntitySelector(
+    EntitySelectorConfig(filter=EntityWithDeviceFilterSelectorConfig(domain=Platform.SWITCH))
+)
 GRID_POWER_SELECTOR = EntitySelector(
     EntitySelectorConfig(
-        filter=EntityFilterSelectorConfig(domain=Platform.SENSOR, device_class=SensorDeviceClass.POWER)
+        filter=EntityWithDeviceFilterSelectorConfig(domain=Platform.SENSOR, device_class=SensorDeviceClass.POWER)
     )
 )
 

@@ -21,7 +21,7 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: PumpCon
         },
         "coordinator": {
             "last_update_success": coordinator.last_update_success,
-            "update_interval_seconds": coordinator.update_interval.total_seconds(),
+            "poll_interval_seconds": coordinator.poll_interval,
             "pump_powered_off": coordinator.pump_powered_off,
             "control_mode": coordinator.control_mode,
             "energy_kwh": coordinator.energy_kwh,

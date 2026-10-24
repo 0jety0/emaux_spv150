@@ -83,11 +83,11 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
 
         host = opts.get(CONF_HOST) or data[CONF_HOST]
         switch_entity_id = opts[CONF_SWITCH_ENTITY] if CONF_SWITCH_ENTITY in opts else data.get(CONF_SWITCH_ENTITY)
-        poll_interval = int(opts.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL))
 
         # Connection-relevant settings: a change in any of these requires a full
         # reload (handled by the update listener in __init__.py).
         self.host: str = host
+        self.poll_interval: int = int(opts.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL))
         self.request_timeout: int = int(opts.get(CONF_REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT))
         self.api_pump = PumpAPI(host, async_get_clientsession(hass), self.request_timeout)
         self.switch_entity_id: str | None = switch_entity_id or None
@@ -131,7 +131,7 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=poll_interval),
+            update_interval=timedelta(seconds=self.poll_interval),
             config_entry=entry,
             # After a command, re-read the pump once it has settled, without blocking the service call.
             request_refresh_debouncer=Debouncer(hass, _LOGGER, cooldown=COMMAND_SETTLE_DELAY, immediate=False),
@@ -185,8 +185,8 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         self.rpm_max_solar = int(opts.get(CONF_RPM_MAX_SOLAR, self.rpm_max_solar))
         self.priming_time = int(opts.get(CONF_PRIMING_TIME, self.priming_time))
         self.speed_change_interval = int(opts.get(CONF_SPEED_CHANGE_INTERVAL, self.speed_change_interval))
-        poll = int(opts.get(CONF_POLL_INTERVAL, int(self.update_interval.total_seconds())))
-        self.update_interval = timedelta(seconds=poll)
+        self.poll_interval = int(opts.get(CONF_POLL_INTERVAL, self.poll_interval))
+        self.update_interval = timedelta(seconds=self.poll_interval)
         self.request_timeout = int(opts.get(CONF_REQUEST_TIMEOUT, self.request_timeout))
         self.api_pump.set_timeout(self.request_timeout)
         self.async_update_listeners()
@@ -238,6 +238,7 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         self._update_option(CONF_RPM_MAX_SOLAR, value)
 
     def set_poll_interval(self, value: int) -> None:
+        self.poll_interval = value
         self.update_interval = timedelta(seconds=value)
         self._update_option(CONF_POLL_INTERVAL, value)
 
@@ -250,8 +251,8 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
     # Pump command
     # -------------------------------------------------------------------------
 
-    async def async_set_pump_key(self, key: str, value: int) -> Any:
-        """Send a command to the pump, respecting the speed-change throttle."""
+    async def async_set_pump_key(self, key: str, value: int) -> str | None:
+        """Send a command to the pump, respecting the speed-change throttle (None when throttled)."""
         if key == "SetCurrentSpeed" and self.speed_change_interval > 0:
             now = dt_util.utcnow()
             if self._last_speed_change_time is not None:

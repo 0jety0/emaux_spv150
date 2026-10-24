@@ -75,7 +75,7 @@ async def test_get_status_empty_object_raises():
 @pytest.mark.asyncio
 async def test_set_key_success():
     api = PumpAPI("192.168.1.50", _session('{"SetCurrentSpeed": 1800}'))
-    assert await api.set_key("SetCurrentSpeed", 1800) == 1800
+    assert await api.set_key("SetCurrentSpeed", 1800) == "1800"
 
 
 @pytest.mark.asyncio

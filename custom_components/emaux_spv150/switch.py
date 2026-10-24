@@ -1,3 +1,5 @@
+from typing import Any
+
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -31,12 +33,12 @@ class RunStopSwitchEntity(PumpBaseEntity, SwitchEntity):
         """Return True when the pump is running."""
         return self.coordinator.data.running
 
-    async def async_turn_on(self, **kwargs) -> None:
+    async def async_turn_on(self, **kwargs: Any) -> None:
         """Start the pump."""
         await self.coordinator.async_set_pump_key(self._set_key, 1)
         await self.coordinator.async_request_refresh()
 
-    async def async_turn_off(self, **kwargs) -> None:
+    async def async_turn_off(self, **kwargs: Any) -> None:
         """Stop the pump."""
         await self.coordinator.async_set_pump_key(self._set_key, 2)
         await self.coordinator.async_request_refresh()

@@ -21,6 +21,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .coordinator import PumpConfigEntry, PumpCoordinator
 from .entity import PumpBaseEntity
+from .models import to_float
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -107,11 +108,13 @@ class PumpEnergySensor(PumpBaseEntity, RestoreSensor):
         """Restore the last known energy value on startup."""
         await super().async_added_to_hass()
         last = await self.async_get_last_sensor_data()
-        if last is not None and last.native_value is not None:
-            try:
-                self.coordinator.restore_energy(float(last.native_value))
-            except (ValueError, TypeError):
-                _LOGGER.warning("Could not restore energy value: %s", last.native_value)
+        if last is None or last.native_value is None:
+            return
+        energy = to_float(last.native_value)
+        if energy is None:
+            _LOGGER.warning("Could not restore energy value: %s", last.native_value)
+            return
+        self.coordinator.restore_energy(energy)
 
     @property
     def native_value(self) -> float | None:
