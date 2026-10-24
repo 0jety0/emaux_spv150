@@ -7,7 +7,7 @@
 [![HACS installs](https://img.shields.io/badge/dynamic/json?color=41BDF5&logo=home-assistant&label=installs&cacheSeconds=15600&url=https://analytics.home-assistant.io/custom_integrations.json&query=$.emaux_spv150.total)](https://analytics.home-assistant.io/custom_integrations)
 [![CI](https://github.com/0jety0/emaux_spv150/actions/workflows/ci.yaml/badge.svg)](https://github.com/0jety0/emaux_spv150/actions/workflows/ci.yaml)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![License: PolyForm NC](https://img.shields.io/badge/license-PolyForm%20NC%201.0.0-orange.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 Custom Home Assistant integration to monitor and control the **Emaux SPV150** variable-speed pool pump over
 your local network, with a **solar mode** that adjusts the pump speed to your solar surplus.
@@ -260,4 +260,4 @@ Changes are listed in the [CHANGELOG](CHANGELOG.md).
 
 ## License
 
-[PolyForm Noncommercial 1.0.0](LICENSE): personal and non-commercial use. Any commercial use requires a separate agreement.
+[MIT](LICENSE).
