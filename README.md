@@ -118,7 +118,7 @@ Default entity IDs on a new installation (they follow the device and entity name
 - After a command (speed, preset, run/stop) the pump is read again once it has settled (2 s).
 - A change of the external power switch triggers an immediate read.
 - While the external switch is off, the pump is not polled: its values show as unavailable and nothing is reported as an error.
-- Right after a Home Assistant restart the switch state stays unknown for a minute or two: while the switch has reported nothing yet, a pump that does not answer is not an error. When the switch is on or unavailable, a pump that does not answer is reported (logged once, values unavailable).
+- A pump that does not answer is not an error while its switch is not on (off, unknown or unavailable, as a smart plug is for a while after every Home Assistant restart), nor during the 3 minutes after the switch turns on, while the pump joins Wi-Fi. Otherwise it is reported: logged once, values unavailable.
 
 ## Supported devices
 
@@ -131,6 +131,7 @@ Emaux SPV150 variable-speed pumps with the built-in Wi-Fi web interface (local C
 - The `Off` mode only disables the solar regulation; it does not stop the pump (use the run/stop switch).
 - Energy is computed by the integration from the power read at each poll, so it is an estimate.
 - The priming wait only applies when the external switch turns the pump on, not after a Home Assistant restart.
+- A pump that stays silent while its external switch is unavailable is not reported: the integration cannot tell whether it is powered.
 
 ## Troubleshooting
 

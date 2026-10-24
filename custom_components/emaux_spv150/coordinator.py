@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import Any, override
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-from homeassistant.const import CONF_HOST, STATE_OFF, STATE_ON, STATE_UNKNOWN
+from homeassistant.const import CONF_HOST, STATE_OFF, STATE_ON
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -40,6 +40,7 @@ from .const import (
     DEFAULT_STEP_UP,
     DOMAIN,
     GRID_POWER_STALENESS_SECONDS,
+    PUMP_BOOT_TIME,
 )
 from .models import PumpStatus, to_float
 from .solar import SolarControllerConfig, SolarRegulator
@@ -60,23 +61,27 @@ def is_switch_off(hass: HomeAssistant, entity_id: str | None) -> bool:
     return state is not None and state.state.lower() == STATE_OFF
 
 
-def is_switch_not_reported_yet(hass: HomeAssistant, entity_id: str | None) -> bool:
-    """Return True when a power switch is configured but has reported no state since the restart.
+def is_pump_silence_expected(hass: HomeAssistant, entity_id: str | None) -> bool:
+    """Return True when a silent pump is most likely without power or still booting.
 
-    A Zigbee plug stays unknown for a minute or two after a Home Assistant restart,
-    also after this entry is set up. Unavailable (plug off the network) is not this case.
+    That is a power switch that is not ON (off, unknown or unavailable, as an MQTT plug
+    is for a while after every restart), or that turned ON less than PUMP_BOOT_TIME ago.
+    No switch, or a switch entity that does not exist, explains nothing.
     """
     if not entity_id:
         return False
     state = hass.states.get(entity_id)
-    return state is not None and state.state == STATE_UNKNOWN
+    if state is None:
+        return False
+    if state.state.lower() != STATE_ON:
+        return True
+    return (dt_util.utcnow() - state.last_changed).total_seconds() < PUMP_BOOT_TIME
 
 
 def is_pump_expected_on(hass: HomeAssistant, entity_id: str | None) -> bool:
     """Return True when the pump must answer: no power switch configured, or the switch is ON.
 
-    Right after a restart a Zigbee plug stays unknown for a minute or two (or its
-    entity does not exist yet): a silent pump is then most likely powered off.
+    Used at setup, when the switch entity may not exist yet.
     """
     if not entity_id:
         return True
@@ -140,7 +145,7 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         # Uptime tracking
         self._uptime_start: datetime | None = None
 
-        # True when the pump has no power: switch OFF, or silent while the switch state is not known
+        # True when the pump has no power: switch OFF, or silent while its switch is not ON or it is booting
         self.pump_powered_off: bool = False
 
         super().__init__(
@@ -422,13 +427,12 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         try:
             raw = await self.api_pump.get_status()
         except PumpError as err:
-            # A silent pump is most likely powered off while the switch has reported nothing yet,
-            # and at setup while it is not ON. Unavailable or missing once running is an outage.
+            # At setup the switch entity may not exist yet (its integration starts later).
             setting_up = self.config_entry.state is ConfigEntryState.SETUP_IN_PROGRESS
-            if (setting_up and not is_pump_expected_on(self.hass, self.switch_entity_id)) or is_switch_not_reported_yet(
+            if (setting_up and not is_pump_expected_on(self.hass, self.switch_entity_id)) or is_pump_silence_expected(
                 self.hass, self.switch_entity_id
             ):
-                _LOGGER.debug("Pump silent while the power switch state is not known: taken as powered off")
+                _LOGGER.debug("Pump silent while its switch is not ON or it is booting: taken as powered off")
                 return self._powered_off()
             # Unknown power during the outage: restart energy integration on the next answer.
             self._last_energy_update = None

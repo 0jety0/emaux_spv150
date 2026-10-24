@@ -67,10 +67,11 @@ async def test_setup_skips_pump_when_switch_off(hass: HomeAssistant, config_entr
 
 @pytest.mark.asyncio
 async def test_setup_retries_when_switch_on_and_pump_unreachable(
-    hass: HomeAssistant, config_entry_with_switch, mock_pump_api
+    hass: HomeAssistant, config_entry_with_switch, mock_pump_api, freezer
 ):
-    """With the switch ON, an unreachable pump still puts the entry in setup retry."""
+    """With the switch ON for longer than the pump takes to boot, an unreachable pump puts the entry in setup retry."""
     hass.states.async_set(MOCK_SWITCH, "on")
+    freezer.tick(timedelta(minutes=10))
     mock_pump_api.get_status.side_effect = PumpError("connection refused")
     config_entry_with_switch.add_to_hass(hass)
 
@@ -146,15 +147,20 @@ async def test_setup_loads_when_switch_entity_is_not_created_yet_and_pump_silent
     assert _error_records(caplog) == []
 
 
-@pytest.mark.asyncio
-async def test_silent_pump_is_an_outage_once_running_if_switch_goes_unavailable(
-    hass: HomeAssistant, config_entry_with_switch, mock_pump_api, caplog
-):
-    """A plug that dropped off the network proves nothing: a silent pump is reported, once."""
+async def _setup_with_switch_on_long_ago(hass: HomeAssistant, entry, freezer) -> None:
     hass.states.async_set(MOCK_SWITCH, "on")
-    config_entry_with_switch.add_to_hass(hass)
-    await hass.config_entries.async_setup(config_entry_with_switch.entry_id)
+    freezer.tick(timedelta(minutes=10))
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
+
+
+@pytest.mark.asyncio
+async def test_silent_pump_is_quiet_when_switch_goes_unavailable(
+    hass: HomeAssistant, config_entry_with_switch, mock_pump_api, caplog, freezer
+):
+    """Seen in production: an MQTT plug is unavailable after every restart; that cannot prove an outage."""
+    await _setup_with_switch_on_long_ago(hass, config_entry_with_switch, freezer)
     reads_before = mock_pump_api.get_status.await_count
 
     mock_pump_api.get_status.side_effect = PumpError("connection refused")
@@ -162,6 +168,47 @@ async def test_silent_pump_is_an_outage_once_running_if_switch_goes_unavailable(
     await hass.async_block_till_done()
 
     assert mock_pump_api.get_status.await_count == reads_before + 1
+    assert config_entry_with_switch.runtime_data.last_update_success
+    assert _error_records(caplog) == []
+
+
+@pytest.mark.asyncio
+async def test_silent_pump_is_an_outage_once_running_if_switch_entity_disappears(
+    hass: HomeAssistant, config_entry_with_switch, mock_pump_api, caplog, freezer
+):
+    """A renamed or deleted switch entity explains nothing: a silent pump is reported, once."""
+    await _setup_with_switch_on_long_ago(hass, config_entry_with_switch, freezer)
+
+    mock_pump_api.get_status.side_effect = PumpError("connection refused")
+    hass.states.async_remove(MOCK_SWITCH)
+    await hass.async_block_till_done()
+    await _next_poll(hass, freezer)
+
+    assert not config_entry_with_switch.runtime_data.last_update_success
+    assert len(_error_records(caplog)) == 1
+
+
+@pytest.mark.asyncio
+async def test_pump_booting_after_switch_on_is_quiet_then_reported_if_it_never_answers(
+    hass: HomeAssistant, config_entry_with_switch, mock_pump_api, caplog, freezer
+):
+    """The pump joins Wi-Fi about 2 minutes after power-on: silence is expected only during that time."""
+    hass.states.async_set(MOCK_SWITCH, "off")
+    config_entry_with_switch.add_to_hass(hass)
+    await hass.config_entries.async_setup(config_entry_with_switch.entry_id)
+    await hass.async_block_till_done()
+
+    mock_pump_api.get_status.side_effect = PumpError("connection refused")
+    hass.states.async_set(MOCK_SWITCH, "on")
+    await hass.async_block_till_done()
+    await _next_poll(hass, freezer)
+
+    assert config_entry_with_switch.runtime_data.last_update_success
+    assert _error_records(caplog) == []
+
+    freezer.tick(timedelta(minutes=5))
+    await _next_poll(hass, freezer)
+
     assert not config_entry_with_switch.runtime_data.last_update_success
     assert len(_error_records(caplog)) == 1
 

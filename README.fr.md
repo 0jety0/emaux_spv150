@@ -118,7 +118,7 @@ Identifiants d'entité par défaut sur une nouvelle installation (ils suivent le
 - Après une commande (vitesse, preset, marche/arrêt), la pompe est relue une fois stabilisée (2 s).
 - Un changement d'état du switch externe déclenche une lecture immédiate.
 - Tant que le switch externe est éteint, la pompe n'est pas interrogée : ses valeurs sont indisponibles et aucune erreur n'est signalée.
-- Juste après un redémarrage de Home Assistant, l'état du switch reste inconnu une à deux minutes : tant que le switch n'a rien remonté, une pompe qui ne répond pas n'est pas une erreur. Quand le switch est allumé ou indisponible, une pompe qui ne répond pas est signalée (une ligne de log, valeurs indisponibles).
+- Une pompe qui ne répond pas n'est pas une erreur tant que son switch n'est pas allumé (éteint, inconnu ou indisponible, comme une prise connectée l'est un moment après chaque redémarrage de Home Assistant), ni pendant les 3 minutes qui suivent son allumage, le temps que la pompe se connecte au Wi-Fi. Sinon elle est signalée : une ligne de log, valeurs indisponibles.
 
 ## Appareils supportés
 
@@ -131,6 +131,7 @@ Pompes à vitesse variable Emaux SPV150 avec l'interface web Wi-Fi intégrée (s
 - Le mode `Off` coupe seulement la régulation solaire ; il n'arrête pas la pompe (utilisez le switch marche/arrêt).
 - L'énergie est calculée par l'intégration à partir de la puissance lue à chaque polling : c'est une estimation.
 - L'attente de priming ne s'applique que quand le switch externe allume la pompe, pas après un redémarrage de Home Assistant.
+- Une pompe muette alors que son switch externe est indisponible n'est pas signalée : l'intégration ne peut pas savoir si elle est alimentée.
 
 ## Dépannage
 

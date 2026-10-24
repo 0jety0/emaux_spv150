@@ -32,6 +32,10 @@ DEFAULT_REQUEST_TIMEOUT = 5
 
 COMMAND_SETTLE_DELAY = 2
 
+# The pump joins Wi-Fi about 1-2 minutes after its power switch turns on: until then
+# it cannot answer, and that is not an outage.
+PUMP_BOOT_TIME = 180
+
 # Solar regulation is suspended when the grid-power entity has not changed for
 # longer than this, to avoid acting on stale readings.
 GRID_POWER_STALENESS_SECONDS = 60

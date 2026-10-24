@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.3.2] — 2026-10-24
+
+### Fixed
+
+- **Error logged at every restart and every pump start**: a pump that does not answer is no longer an error while its smart plug is off, unknown or unavailable (as an MQTT plug is for a while after a restart), nor during the 3 minutes after the plug turns on while the pump joins Wi-Fi. It is still reported with the plug on for longer, with no plug configured, or when the plug entity disappears.
+
 ## [2.3.1] — 2026-10-24
 
 ### Fixed
