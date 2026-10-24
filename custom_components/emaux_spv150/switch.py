@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, override
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import HomeAssistant
@@ -29,15 +29,18 @@ class RunStopSwitchEntity(PumpBaseEntity, SwitchEntity):
         self._attr_unique_id = "spv150_running_status"
 
     @property
+    @override
     def is_on(self) -> bool:
         """Return True when the pump is running."""
         return self.coordinator.data.running
 
+    @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Start the pump."""
         await self.coordinator.async_set_pump_key(self._set_key, 1)
         await self.coordinator.async_request_refresh()
 
+    @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Stop the pump."""
         await self.coordinator.async_set_pump_key(self._set_key, 2)

@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import override
 
 from homeassistant.components.number import (
     NumberEntity,
@@ -186,15 +187,18 @@ class PumpNumber(PumpBaseEntity, NumberEntity):
         self._attr_unique_id = f"spv150_{description.key}"
 
     @property
+    @override
     def available(self) -> bool:
         """Local settings stay usable while the pump is off; pump-backed values follow the pump."""
         return self.entity_description.set_key is None or super().available
 
     @property
+    @override
     def native_value(self) -> float | None:
         """Return the current value via the description's value_fn."""
         return self.entity_description.value_fn(self.coordinator)
 
+    @override
     async def async_set_native_value(self, value: float) -> None:
         """Send the new value to the pump or apply it locally on the coordinator."""
         description = self.entity_description

@@ -1,13 +1,13 @@
 import ipaddress
 import re
-from typing import Any
+from typing import Any, override
 
-import voluptuous as vol
+import probatio
 from homeassistant import config_entries
 from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.const import CONF_HOST, Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import EntitySelector, EntitySelectorConfig, EntityWithDeviceFilterSelectorConfig
 
@@ -73,13 +73,13 @@ async def _pump_unreachable(hass: HomeAssistant, host: str, switch_entity_id: st
     return False
 
 
-def _connection_schema(host: str) -> vol.Schema:
+def _connection_schema(host: str) -> probatio.Schema:
     """Fields shared by the user and reconfigure steps."""
-    return vol.Schema(
+    return probatio.Schema(
         {
-            vol.Required(CONF_HOST, default=host): str,
-            vol.Optional(CONF_SWITCH_ENTITY): SWITCH_SELECTOR,
-            vol.Optional(CONF_GRID_POWER_ENTITY): GRID_POWER_SELECTOR,
+            probatio.Required(CONF_HOST, default=host): str,
+            probatio.Optional(CONF_SWITCH_ENTITY): SWITCH_SELECTOR,
+            probatio.Optional(CONF_GRID_POWER_ENTITY): GRID_POWER_SELECTOR,
         }
     )
 
@@ -95,6 +95,7 @@ class EmauxSpv150ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    @override
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle the initial configuration step."""
         errors: dict[str, str] = {}
@@ -163,6 +164,8 @@ class EmauxSpv150ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     @staticmethod
+    @callback
+    @override
     def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> EmauxSpv150OptionsFlow:
         """Return the options flow handler."""
         return EmauxSpv150OptionsFlow()
@@ -198,28 +201,32 @@ class EmauxSpv150OptionsFlow(config_entries.OptionsFlow):
                     preserved = {k: v for k, v in self.config_entry.options.items() if k not in user_input}
                     return self.async_create_entry(title="", data={**preserved, **user_input})
 
-        schema = vol.Schema(
+        schema = probatio.Schema(
             {
-                vol.Required(CONF_HOST, default=opts.get(CONF_HOST, data.get(CONF_HOST, DEFAULT_HOST))): str,
+                probatio.Required(CONF_HOST, default=opts.get(CONF_HOST, data.get(CONF_HOST, DEFAULT_HOST))): str,
                 # Suggested (not default) values: a default would come back when the field is cleared.
-                vol.Optional(CONF_SWITCH_ENTITY): SWITCH_SELECTOR,
-                vol.Optional(CONF_GRID_POWER_ENTITY): GRID_POWER_SELECTOR,
-                vol.Optional(CONF_SETPOINT, default=opts.get(CONF_SETPOINT, DEFAULT_SETPOINT)): vol.Coerce(float),
-                vol.Optional(
-                    CONF_DEAD_BAND_LOWER, default=opts.get(CONF_DEAD_BAND_LOWER, DEFAULT_DEAD_BAND_LOWER)
-                ): vol.Coerce(float),
-                vol.Optional(
-                    CONF_DEAD_BAND_UPPER, default=opts.get(CONF_DEAD_BAND_UPPER, DEFAULT_DEAD_BAND_UPPER)
-                ): vol.Coerce(float),
-                vol.Optional(CONF_STEP_UP, default=opts.get(CONF_STEP_UP, DEFAULT_STEP_UP)): vol.Coerce(int),
-                vol.Optional(CONF_STEP_DOWN, default=opts.get(CONF_STEP_DOWN, DEFAULT_STEP_DOWN)): vol.Coerce(int),
-                vol.Optional(CONF_PRIMING_TIME, default=opts.get(CONF_PRIMING_TIME, DEFAULT_PRIMING_TIME)): vol.All(
-                    vol.Coerce(int), vol.Range(min=60, max=1200)
+                probatio.Optional(CONF_SWITCH_ENTITY): SWITCH_SELECTOR,
+                probatio.Optional(CONF_GRID_POWER_ENTITY): GRID_POWER_SELECTOR,
+                probatio.Optional(CONF_SETPOINT, default=opts.get(CONF_SETPOINT, DEFAULT_SETPOINT)): probatio.Coerce(
+                    float
                 ),
-                vol.Optional(
+                probatio.Optional(
+                    CONF_DEAD_BAND_LOWER, default=opts.get(CONF_DEAD_BAND_LOWER, DEFAULT_DEAD_BAND_LOWER)
+                ): probatio.Coerce(float),
+                probatio.Optional(
+                    CONF_DEAD_BAND_UPPER, default=opts.get(CONF_DEAD_BAND_UPPER, DEFAULT_DEAD_BAND_UPPER)
+                ): probatio.Coerce(float),
+                probatio.Optional(CONF_STEP_UP, default=opts.get(CONF_STEP_UP, DEFAULT_STEP_UP)): probatio.Coerce(int),
+                probatio.Optional(CONF_STEP_DOWN, default=opts.get(CONF_STEP_DOWN, DEFAULT_STEP_DOWN)): probatio.Coerce(
+                    int
+                ),
+                probatio.Optional(
+                    CONF_PRIMING_TIME, default=opts.get(CONF_PRIMING_TIME, DEFAULT_PRIMING_TIME)
+                ): probatio.All(probatio.Coerce(int), probatio.Range(min=60, max=1200)),
+                probatio.Optional(
                     CONF_SPEED_CHANGE_INTERVAL,
                     default=opts.get(CONF_SPEED_CHANGE_INTERVAL, DEFAULT_SPEED_CHANGE_INTERVAL),
-                ): vol.All(vol.Coerce(int), vol.Range(min=0, max=300)),
+                ): probatio.All(probatio.Coerce(int), probatio.Range(min=0, max=300)),
             }
         )
         current = _suggested_entities(

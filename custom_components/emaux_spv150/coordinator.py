@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, override
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, STATE_OFF, STATE_ON
@@ -392,6 +392,7 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
     # DataUpdateCoordinator hooks
     # -------------------------------------------------------------------------
 
+    @override
     async def _async_update_data(self) -> PumpStatus:
         """Fetch latest pump data and apply solar regulation if active."""
         switch_on = not is_switch_off(self.hass, self.switch_entity_id)

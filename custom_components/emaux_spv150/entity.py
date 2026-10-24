@@ -1,3 +1,5 @@
+from typing import override
+
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -20,6 +22,7 @@ class PumpBaseEntity(CoordinatorEntity[PumpCoordinator]):
         )
 
     @property
+    @override
     def available(self) -> bool:
         """Return False when the pump has no power or the last update failed."""
         return self.coordinator.last_update_success and not self.coordinator.pump_powered_off

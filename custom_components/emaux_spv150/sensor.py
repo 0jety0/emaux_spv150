@@ -1,6 +1,7 @@
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import override
 
 from homeassistant.components.sensor import (
     RestoreSensor,
@@ -87,6 +88,7 @@ class PumpSensor(PumpBaseEntity, SensorEntity):
         self._attr_unique_id = f"spv150_{description.key}"
 
     @property
+    @override
     def native_value(self) -> float | None:
         """Return the current sensor value via the description's value_fn."""
         return self.entity_description.value_fn(self.coordinator)
@@ -104,6 +106,7 @@ class PumpEnergySensor(PumpBaseEntity, RestoreSensor):
         super().__init__(coordinator)
         self._attr_unique_id = "spv150_energy_kwh"
 
+    @override
     async def async_added_to_hass(self) -> None:
         """Restore the last known energy value on startup."""
         await super().async_added_to_hass()
@@ -117,6 +120,7 @@ class PumpEnergySensor(PumpBaseEntity, RestoreSensor):
         self.coordinator.restore_energy(energy)
 
     @property
+    @override
     def native_value(self) -> float | None:
         """Return cumulated energy in kWh from coordinator."""
         return self.coordinator.energy_kwh
