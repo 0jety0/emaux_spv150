@@ -21,7 +21,7 @@ class _FakeResponse:
     async def text(self) -> str:
         return self._text
 
-    async def __aenter__(self) -> "_FakeResponse":
+    async def __aenter__(self) -> _FakeResponse:
         if self._enter_exc is not None:
             raise self._enter_exc
         return self

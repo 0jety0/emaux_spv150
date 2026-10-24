@@ -163,7 +163,7 @@ class EmauxSpv150ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     @staticmethod
-    def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> "EmauxSpv150OptionsFlow":
+    def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> EmauxSpv150OptionsFlow:
         """Return the options flow handler."""
         return EmauxSpv150OptionsFlow()
 

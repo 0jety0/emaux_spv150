@@ -1,6 +1,6 @@
 [tools]
 python = "3.14"
-uv = "0.13.3"
+uv = "0.13.5"
 
 [tasks.install]
 description = "Install the dev/test environment from uv.lock"
