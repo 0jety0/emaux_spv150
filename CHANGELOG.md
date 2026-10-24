@@ -1,5 +1,65 @@
 # Changelog
 
+## [2.3.0] — 2026-10-24
+
+Requires **Home Assistant 2026.10** or later (Python 3.14).
+
+### Fixed
+
+- **Pump powered off at startup**: right after a Home Assistant restart the smart plug's state stays unknown for a minute or two (or its entity does not exist yet). A pump that does not answer then no longer fails the setup or marks the integration as needing attention. Once running, a silent pump is reported as unavailable as before.
+- **Log flood**: an unreachable pump is logged once when it stops answering and once when it answers again, instead of an error at every poll.
+- **Speed change refused silently**: a speed change sent within the minimum interval now shows an error saying when to retry, instead of being dropped. Automations that set the speed twice within the interval now get that error.
+- **Pump address in errors**: error messages no longer contain the pump IP.
+
+### Added
+
+- **Diagnostics download** (pump address removed).
+- **Entity pickers** in the setup, reconfigure and options forms: the power switch field lists switches and the grid field lists power sensors (`device_class: power`). A grid sensor without that device class, or a non-switch power entity, can no longer be picked; an already saved one keeps working.
+- **Field descriptions** in every form.
+
+### Changed
+
+- Translated error messages; icons moved to `icons.json` (same icons).
+- Sensors no longer limit parallel updates; the device info is built once.
+
+### Tooling & project
+
+- Minimum Home Assistant 2026.10.0 in `hacs.json`, Python >= 3.14.2, lock refreshed (tests on Home Assistant 2026.10.2).
+- `mypy --strict` with Home Assistant core's settings in CI and `mise run typecheck`; schemas use `probatio`; `@override` everywhere.
+- 100 % test coverage per module; `quality_scale.yaml` tracks every Integration Quality Scale rule.
+- README: data updates, supported devices, known limitations, troubleshooting, removal.
+
+## [2.2.0] — 2026-10-20
+
+### Fixed
+
+- **Phantom energy**: the energy sensor no longer bills the whole downtime at the current power after a switch-off or a failed poll (12 h off at 1000 W used to add 12 kWh).
+- **Reconfigure ignored**: a host saved once through the options flow no longer shadows later reconfigurations; the unique ID now follows the host, and the form shows the values actually in use. Reconfigure no longer uses `async_update_reload_and_abort`, which stops working in Home Assistant 2026.12.
+- **Solar regulation**: a rejected speed command is logged and retried on the next poll instead of failing the whole poll; a failed command no longer arms the 60 s speed-change throttle.
+- **Steady grid power**: freshness is judged on `last_reported`, so a stable export reported with the same value no longer suspends regulation after 60 s.
+- **Local settings while the pump is off**: the control-mode select and the regulation numbers stay available (Home Assistant silently drops service calls on unavailable entities).
+- **Options shown at once**: values saved through the options flow appear immediately on the number entities.
+- **Clearing optional fields**: the external switch and grid entities can now be removed in the options and reconfigure flows.
+- **Robust responses**: JSON that is not an object, or an undecodable body, is treated as "no data" instead of crashing the poll.
+- **Host input**: spaces around the host are stripped.
+
+### Changed
+
+- **Faster commands**: run/stop and number commands no longer block the service call for 2 s; the pump is re-read once it has settled (debounced refresh).
+- **One read at setup** instead of three.
+- **Immediate reaction to the power switch**: the integration refreshes as soon as the external switch changes state.
+- **Entity categories**: regulation numbers are `config` entities and uptime is `diagnostic` (they leave auto-generated dashboards; manual dashboards are unaffected).
+
+### Tooling & project
+
+- CI actions and Python 3.14 pinned, `hassfest` workflow file name fixed, tests run against Home Assistant 2026.10.2, `mise.toml` tasks (`install`, `lint`, `fmt`, `test`), stale `requirements*.txt` / `Pipfile.lock` removed.
+
+## [2.1.3] — 2026-10-20
+
+### Fixed
+
+- **Powered-off pump no longer blocks setup or configuration**: when the external power switch (`switch_entity`) is explicitly `off`, the integration no longer contacts the pump during setup or in the config, reconfigure and options flows. Previously, a pump switched off at its plug (e.g. during winter) left the config entry in an endless "Cannot reach pump during setup" retry loop, and options could not be saved (`cannot_connect`). Entities stay unavailable while the switch is off, exactly as during polling, and the pump is contacted again on the first poll after the switch turns `on`. An `unknown`/`unavailable` switch still counts as on.
+
 ## [2.1.2] — 2026-08-07
 
 ### Changed

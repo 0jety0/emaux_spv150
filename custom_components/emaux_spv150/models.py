@@ -13,7 +13,7 @@ def to_float(value: Any) -> float | None:
     """Coerce a raw pump value to float, or None when it cannot be parsed."""
     try:
         return float(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -28,7 +28,7 @@ class PumpStatus:
     running: bool = False
 
     @classmethod
-    def from_raw(cls, raw: dict[str, Any]) -> "PumpStatus":
+    def from_raw(cls, raw: dict[str, Any]) -> PumpStatus:
         """Build a typed status from the pump's raw JSON response.
 
         ``RunningStatus`` is normalised through ``str()`` so the comparison stays
@@ -44,6 +44,6 @@ class PumpStatus:
         )
 
     @classmethod
-    def zeroed(cls) -> "PumpStatus":
+    def zeroed(cls) -> PumpStatus:
         """Return an all-zero status used when the external switch is OFF."""
         return cls(current_speed=0.0, current_watts=0.0, current_gpm=0.0, speed_selected=0, running=False)

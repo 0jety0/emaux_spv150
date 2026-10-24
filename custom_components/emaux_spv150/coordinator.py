@@ -1,17 +1,19 @@
 import logging
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, override
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
+from homeassistant.const import CONF_HOST, STATE_OFF, STATE_ON
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .api import PumpAPI
+from .api import PumpAPI, PumpError
 from .const import (
+    COMMAND_SETTLE_DELAY,
     CONF_DEAD_BAND_LOWER,
     CONF_DEAD_BAND_UPPER,
     CONF_GRID_POWER_ENTITY,
@@ -36,6 +38,7 @@ from .const import (
     DEFAULT_SPEED_CHANGE_INTERVAL,
     DEFAULT_STEP_DOWN,
     DEFAULT_STEP_UP,
+    DOMAIN,
     GRID_POWER_STALENESS_SECONDS,
 )
 from .models import PumpStatus, to_float
@@ -44,6 +47,33 @@ from .solar import SolarControllerConfig, SolarRegulator
 _LOGGER = logging.getLogger(__name__)
 
 type PumpConfigEntry = ConfigEntry["PumpCoordinator"]
+
+
+def is_switch_off(hass: HomeAssistant, entity_id: str | None) -> bool:
+    """Return True when an external power switch is configured and explicitly OFF.
+
+    Unknown or unavailable states count as ON: the pump may still be powered.
+    """
+    if not entity_id:
+        return False
+    state = hass.states.get(entity_id)
+    return state is not None and state.state.lower() == STATE_OFF
+
+
+def is_pump_expected_on(hass: HomeAssistant, entity_id: str | None) -> bool:
+    """Return True when the pump must answer: no power switch configured, or the switch is ON.
+
+    Right after a restart a Zigbee plug stays unknown for a minute or two (or its
+    entity does not exist yet): a silent pump is then most likely powered off.
+    """
+    if not entity_id:
+        return True
+    state = hass.states.get(entity_id)
+    return state is not None and state.state.lower() == STATE_ON
+
+
+class SpeedChangeThrottled(ServiceValidationError):
+    """A speed change was asked before the minimum interval since the previous one."""
 
 
 class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
@@ -57,11 +87,11 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
 
         host = opts.get(CONF_HOST) or data[CONF_HOST]
         switch_entity_id = opts[CONF_SWITCH_ENTITY] if CONF_SWITCH_ENTITY in opts else data.get(CONF_SWITCH_ENTITY)
-        poll_interval = int(opts.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL))
 
         # Connection-relevant settings: a change in any of these requires a full
         # reload (handled by the update listener in __init__.py).
         self.host: str = host
+        self.poll_interval: int = int(opts.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL))
         self.request_timeout: int = int(opts.get(CONF_REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT))
         self.api_pump = PumpAPI(host, async_get_clientsession(hass), self.request_timeout)
         self.switch_entity_id: str | None = switch_entity_id or None
@@ -89,7 +119,6 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         # Startup priming tracking (True = no priming needed until switch OFF→ON)
         self._pump_started_at: datetime | None = None
         self._priming_done: bool = True
-        self._prev_running: bool = False
         self._prev_switch_on: bool = True
 
         # Energy tracking
@@ -99,15 +128,17 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         # Uptime tracking
         self._uptime_start: datetime | None = None
 
-        # True when the external switch entity is explicitly OFF
-        self.pump_switch_off: bool = False
+        # True when the pump has no power: switch OFF, or silent at setup while the switch state is unknown
+        self.pump_powered_off: bool = False
 
         super().__init__(
             hass,
             _LOGGER,
-            name="PumpCoordinator",
-            update_interval=timedelta(seconds=poll_interval),
+            name=DOMAIN,
+            update_interval=timedelta(seconds=self.poll_interval),
             config_entry=entry,
+            # After a command, re-read the pump once it has settled, without blocking the service call.
+            request_refresh_debouncer=Debouncer(hass, _LOGGER, cooldown=COMMAND_SETTLE_DELAY, immediate=False),
         )
 
     # -------------------------------------------------------------------------
@@ -158,10 +189,11 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         self.rpm_max_solar = int(opts.get(CONF_RPM_MAX_SOLAR, self.rpm_max_solar))
         self.priming_time = int(opts.get(CONF_PRIMING_TIME, self.priming_time))
         self.speed_change_interval = int(opts.get(CONF_SPEED_CHANGE_INTERVAL, self.speed_change_interval))
-        poll = int(opts.get(CONF_POLL_INTERVAL, int(self.update_interval.total_seconds())))
-        self.update_interval = timedelta(seconds=poll)
+        self.poll_interval = int(opts.get(CONF_POLL_INTERVAL, self.poll_interval))
+        self.update_interval = timedelta(seconds=self.poll_interval)
         self.request_timeout = int(opts.get(CONF_REQUEST_TIMEOUT, self.request_timeout))
         self.api_pump.set_timeout(self.request_timeout)
+        self.async_update_listeners()
 
     def set_control_mode(self, mode: str) -> None:
         self.control_mode = mode
@@ -210,6 +242,7 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         self._update_option(CONF_RPM_MAX_SOLAR, value)
 
     def set_poll_interval(self, value: int) -> None:
+        self.poll_interval = value
         self.update_interval = timedelta(seconds=value)
         self._update_option(CONF_POLL_INTERVAL, value)
 
@@ -222,20 +255,30 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
     # Pump command
     # -------------------------------------------------------------------------
 
-    async def async_set_pump_key(self, key: str, value: int) -> Any:
-        """Send a command to the pump, respecting the speed-change throttle."""
+    async def async_set_pump_key(self, key: str, value: int) -> str:
+        """Send a command to the pump; a speed change within the minimum interval raises SpeedChangeThrottled."""
         if key == "SetCurrentSpeed" and self.speed_change_interval > 0:
             now = dt_util.utcnow()
             if self._last_speed_change_time is not None:
                 elapsed = (now - self._last_speed_change_time).total_seconds()
                 if elapsed < self.speed_change_interval:
-                    _LOGGER.debug(
-                        "Speed change throttled: %.0fs remaining",
-                        self.speed_change_interval - elapsed,
+                    raise SpeedChangeThrottled(
+                        translation_domain=DOMAIN,
+                        translation_key="speed_change_throttled",
+                        translation_placeholders={"interval": str(self.speed_change_interval)},
                     )
-                    return None
-            self._last_speed_change_time = now
-        return await self.api_pump.set_key(key, value)
+        try:
+            result = await self.api_pump.set_key(key, value)
+        except PumpError as err:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="command_failed",
+                translation_placeholders={"command": key, "error": str(err)},
+            ) from err
+        if key == "SetCurrentSpeed":
+            # Armed only once the pump accepted the change, so a failure does not block the retry.
+            self._last_speed_change_time = dt_util.utcnow()
+        return result
 
     # -------------------------------------------------------------------------
     # Monitoring helpers
@@ -302,11 +345,12 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         if grid_power is None:
             return
 
-        if grid_state.last_changed is not None:
-            stale_seconds = (dt_util.utcnow() - grid_state.last_changed).total_seconds()
+        # last_reported moves on every report, even with an unchanged value (last_changed does not).
+        if grid_state.last_reported is not None:
+            stale_seconds = (dt_util.utcnow() - grid_state.last_reported).total_seconds()
             if stale_seconds > GRID_POWER_STALENESS_SECONDS:
                 _LOGGER.warning(
-                    "Grid power entity '%s' unchanged for %.0fs — skipping solar regulation",
+                    "Grid power entity '%s' not reported for %.0fs — skipping solar regulation",
                     self.grid_power_entity,
                     stale_seconds,
                 )
@@ -323,37 +367,62 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
                 current_speed,
                 new_speed,
             )
-            await self.async_set_pump_key("SetCurrentSpeed", new_speed)
+            try:
+                await self.async_set_pump_key("SetCurrentSpeed", new_speed)
+            except SpeedChangeThrottled:
+                _LOGGER.debug("Solar regulation: speed change to %d rpm throttled", new_speed)
+            except HomeAssistantError as err:
+                # The status was read fine: keep it, the regulator retries on the next poll.
+                _LOGGER.warning("Solar regulation: speed change to %d rpm failed: %s", new_speed, err)
+
+    @callback
+    def async_on_switch_change(self, event: Event[EventStateChangedData]) -> None:
+        """Re-poll as soon as the power switch flips instead of waiting for the next poll."""
+        old, new = event.data["old_state"], event.data["new_state"]
+        if old is not None and new is not None and old.state == new.state:
+            return  # attribute-only update
+        self.config_entry.async_create_background_task(self.hass, self.async_refresh(), "emaux_spv150_switch_refresh")
+
+    def _powered_off(self) -> PumpStatus:
+        """Stop the uptime and energy tracking and return the status of a pump without power."""
+        self.pump_powered_off = True
+        self._update_uptime(False)
+        self._last_speed_change_time = None
+        self._last_energy_update = None
+        return PumpStatus.zeroed()
 
     # -------------------------------------------------------------------------
     # DataUpdateCoordinator hooks
     # -------------------------------------------------------------------------
 
-    async def _async_setup(self) -> None:
-        """Verify pump is reachable before entities are set up."""
-        if not await self.api_pump.get_status():
-            raise ConfigEntryNotReady("Cannot reach pump during setup")
-
+    @override
     async def _async_update_data(self) -> PumpStatus:
         """Fetch latest pump data and apply solar regulation if active."""
-        switch_on = True
-        if self.switch_entity_id:
-            switch_state = self.hass.states.get(self.switch_entity_id)
-            switch_on = not (switch_state and switch_state.state.lower() == "off")
-            if not switch_on:
-                self.pump_switch_off = True
-                self._update_uptime(False)
-                self._prev_running = False
-                self._pump_started_at = None
-                self._priming_done = True
-                self._last_speed_change_time = None
-                self._prev_switch_on = False
-                return PumpStatus.zeroed()
+        switch_on = not is_switch_off(self.hass, self.switch_entity_id)
+        if not switch_on:
+            # Priming starts again on the next OFF→ON flip of the switch.
+            self._pump_started_at = None
+            self._priming_done = True
+            self._prev_switch_on = False
+            return self._powered_off()
 
-        self.pump_switch_off = False
-        raw = await self.api_pump.get_status()
-        if not raw:
-            raise UpdateFailed("Pump did not respond or returned empty data")
+        self.pump_powered_off = False
+        try:
+            raw = await self.api_pump.get_status()
+        except PumpError as err:
+            # Only at setup: once running, an unknown switch state no longer explains a silent pump.
+            if self.config_entry.state is ConfigEntryState.SETUP_IN_PROGRESS and not is_pump_expected_on(
+                self.hass, self.switch_entity_id
+            ):
+                _LOGGER.debug("Pump silent at setup while the power switch state is unknown: taken as powered off")
+                return self._powered_off()
+            # Unknown power during the outage: restart energy integration on the next answer.
+            self._last_energy_update = None
+            raise UpdateFailed(
+                translation_domain=DOMAIN,
+                translation_key="update_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
 
         status = PumpStatus.from_raw(raw)
         self._update_uptime(status.running)
@@ -368,7 +437,6 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
                 self._priming_done = False
                 _LOGGER.debug("Switch turned ON: priming window of %ds begins", self.priming_time)
             self._prev_switch_on = switch_on
-        self._prev_running = status.running
 
         # After priming window elapses, unlock solar regulation
         if (

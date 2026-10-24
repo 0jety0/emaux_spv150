@@ -1,3 +1,5 @@
+from typing import override
+
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -10,17 +12,17 @@ class PumpBaseEntity(CoordinatorEntity[PumpCoordinator]):
 
     _attr_has_entity_name = True
 
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information for grouping entities under a single device."""
-        return DeviceInfo(
-            identifiers={(DOMAIN, self.coordinator.config_entry.entry_id)},
+    def __init__(self, coordinator: PumpCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, coordinator.config_entry.entry_id)},
             name="Emaux SPV150",
             manufacturer="Emaux",
             model="SPV150",
         )
 
     @property
+    @override
     def available(self) -> bool:
-        """Return False when the external switch is OFF or the last update failed."""
-        return self.coordinator.last_update_success and not self.coordinator.pump_switch_off
+        """Return False when the pump has no power or the last update failed."""
+        return self.coordinator.last_update_success and not self.coordinator.pump_powered_off

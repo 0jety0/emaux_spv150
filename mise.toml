@@ -1,0 +1,23 @@
+[tools]
+python = "3.14"
+uv = "0.13.5"
+
+[tasks.install]
+description = "Install the dev/test environment from uv.lock"
+run = "uv sync --frozen"
+
+[tasks.lint]
+description = "Lint and check formatting (same as CI)"
+run = ["uv run ruff check .", "uv run ruff format --check ."]
+
+[tasks.typecheck]
+description = "Type-check the integration with mypy --strict (same as CI)"
+run = "uv run mypy"
+
+[tasks.fmt]
+description = "Format code and apply safe lint fixes"
+run = ["uv run ruff format .", "uv run ruff check --fix ."]
+
+[tasks.test]
+description = "Run the test suite"
+run = "uv run pytest -q"

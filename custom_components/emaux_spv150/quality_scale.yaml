@@ -1,0 +1,102 @@
+# Integration Quality Scale status, in the format used by Home Assistant core.
+# hassfest does not check this file for custom integrations: it documents
+# where the integration stands against https://developers.home-assistant.io/docs/core/integration-quality-scale/rules/
+rules:
+  # Bronze
+  action-setup:
+    status: exempt
+    comment: No custom actions.
+  appropriate-polling: done
+  brands:
+    status: todo
+    comment: Local brand/ icons for Home Assistant 2026.3+ come with PR #5.
+  common-modules: done
+  config-flow:
+    status: todo
+    comment: >-
+      Host, switch and grid entity can also be changed in the options flow
+      (stored in options), duplicating the reconfigure flow; the rule keeps
+      connection settings in data.
+  config-flow-test-coverage: done
+  dependency-transparency:
+    status: exempt
+    comment: No third-party requirement; the HTTP client is api.py on aiohttp.
+  docs-actions:
+    status: exempt
+    comment: No custom actions.
+  docs-conditions:
+    status: exempt
+    comment: No custom conditions.
+  docs-high-level-description: done
+  docs-installation-instructions: done
+  docs-removal-instructions: done
+  docs-triggers:
+    status: exempt
+    comment: No custom triggers.
+  entity-event-setup: done
+  entity-unique-id:
+    status: todo
+    comment: >-
+      Unique IDs are not prefixed per config entry, so a second pump collides.
+      Fixing it changes every unique ID and needs a registry migration.
+  has-entity-name: done
+  runtime-data: done
+  test-before-configure: done
+  test-before-setup: done
+  unique-config-entry: done
+
+  # Silver
+  action-exceptions: done
+  config-entry-unloading: done
+  docs-configuration-parameters: done
+  docs-installation-parameters: done
+  entity-unavailable: done
+  integration-owner: done
+  log-when-unavailable: done
+  parallel-updates: done
+  reauthentication-flow:
+    status: exempt
+    comment: The pump has no authentication.
+  test-coverage: done
+
+  # Gold
+  devices: done
+  diagnostics: done
+  discovery:
+    status: todo
+    comment: No discovery mechanism of the pump (mDNS, SSDP, DHCP) has been investigated.
+  discovery-update-info:
+    status: todo
+    comment: Depends on discovery.
+  docs-data-update: done
+  docs-examples:
+    status: todo
+    comment: No automation examples yet.
+  docs-known-limitations: done
+  docs-supported-devices: done
+  docs-supported-functions: done
+  docs-troubleshooting: done
+  docs-use-cases: done
+  dynamic-devices:
+    status: exempt
+    comment: One device per config entry.
+  entity-category: done
+  entity-device-class: done
+  entity-disabled-by-default:
+    status: todo
+    comment: Candidates are uptime, polling interval and request timeout.
+  entity-translations: done
+  exception-translations: done
+  icon-translations: done
+  reconfiguration-flow: done
+  repair-issues:
+    status: todo
+    comment: A missing grid-power entity is only logged; it could raise a repair issue.
+  stale-devices:
+    status: exempt
+    comment: One device per config entry.
+
+  # Platinum
+  async-dependency: done
+  inject-websession: done
+  strict-typing: done

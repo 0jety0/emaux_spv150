@@ -1,0 +1,29 @@
+{
+  "entity": {
+    "sensor": {
+      "current_watts": { "default": "mdi:flash" },
+      "current_gpm": { "default": "mdi:water-pump" },
+      "uptime_hours": { "default": "mdi:clock-start" },
+      "energy_kwh": { "default": "mdi:lightning-bolt-circle" }
+    },
+    "number": {
+      "current_speed": { "default": "mdi:speedometer" },
+      "speed_selected": { "default": "mdi:numeric" },
+      "setpoint": { "default": "mdi:target" },
+      "dead_band_lower": { "default": "mdi:solar-power" },
+      "dead_band_upper": { "default": "mdi:transmission-tower" },
+      "step_up": { "default": "mdi:chevron-up-circle" },
+      "step_down": { "default": "mdi:chevron-down-circle" },
+      "rpm_min_solar": { "default": "mdi:speedometer-slow" },
+      "rpm_max_solar": { "default": "mdi:speedometer" },
+      "poll_interval": { "default": "mdi:timer-outline" },
+      "request_timeout": { "default": "mdi:timer-sand" }
+    },
+    "switch": {
+      "running_status": { "default": "mdi:power" }
+    },
+    "select": {
+      "control_mode": { "default": "mdi:tune" }
+    }
+  }
+}

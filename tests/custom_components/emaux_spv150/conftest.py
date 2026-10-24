@@ -6,6 +6,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.emaux_spv150.const import DOMAIN
 
 MOCK_HOST = "192.168.1.50"
+MOCK_SWITCH = "switch.pool_power"
 MOCK_STATUS = {
     "CurrentSpeed": "1500",
     "CurrentWatts": "300",
@@ -46,7 +47,7 @@ def config_entry_with_switch():
     """Config entry that references an external power switch."""
     return MockConfigEntry(
         domain=DOMAIN,
-        data={"host": MOCK_HOST, "switch_entity": "switch.pool_power"},
+        data={"host": MOCK_HOST, "switch_entity": MOCK_SWITCH},
         options={},
         entry_id="test_entry_switch",
         unique_id=MOCK_HOST,

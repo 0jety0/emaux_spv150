@@ -3,8 +3,7 @@ import logging
 from typing import Any
 from urllib.parse import quote
 
-from aiohttp import ClientError, ClientSession, ClientTimeout
-from homeassistant.exceptions import HomeAssistantError
+from aiohttp import ClientError, ClientResponseError, ClientSession, ClientTimeout
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -12,6 +11,10 @@ _LOGGER = logging.getLogger(__name__)
 # allow a generous default timeout (well under the default 30 s polling interval).
 # Both the timeout and the polling interval are user-configurable at runtime.
 DEFAULT_TIMEOUT = 5
+
+
+class PumpError(Exception):
+    """The pump could not be reached, gave an unusable answer or refused a command."""
 
 
 class PumpAPI:
@@ -27,41 +30,45 @@ class PumpAPI:
         self._timeout = ClientTimeout(total=seconds)
 
     async def _make_request(self, url: str) -> dict[str, Any]:
-        """Perform a GET request and return parsed JSON data.
+        """Perform a GET request and return the parsed JSON object.
 
-        Returns an empty dict on any transport or decoding error so the caller
-        can treat it as a single "no data" sentinel. The pump IP is never
-        included in error logs (only in DEBUG) to avoid leaking LAN topology.
+        Raises PumpError on any transport or decoding error. Logging is left to
+        the caller (the coordinator logs an outage once, not on every poll). The
+        pump address is kept out of the error (aiohttp puts host:port in its
+        messages) and only logged in DEBUG, to avoid leaking the LAN layout.
         """
+        _LOGGER.debug("Requesting %s", url)
         try:
             async with self._session.get(url, timeout=self._timeout) as response:
                 response.raise_for_status()
-                data = await response.text()
-                return json.loads(data)
+                payload = json.loads(await response.text())
+        except ClientResponseError as err:
+            raise PumpError(f"Pump answered HTTP {err.status}") from err
         except ClientError as err:
-            _LOGGER.error("Pump request failed: %s", err)
-            _LOGGER.debug("Failing URL: %s", url)
-            return {}
-        except TimeoutError:
-            _LOGGER.error("Pump request timed out after %ss", self._timeout.total)
-            _LOGGER.debug("Timed-out URL: %s", url)
-            return {}
-        except json.JSONDecodeError as err:
-            _LOGGER.error("Pump returned invalid JSON: %s", err)
-            _LOGGER.debug("Offending URL: %s", url)
-            return {}
+            _LOGGER.debug("Request failed: %s", err)
+            raise PumpError(f"Pump request failed: {type(err).__name__}") from err
+        except TimeoutError as err:
+            raise PumpError(f"Pump request timed out after {self._timeout.total:g}s") from err
+        except (json.JSONDecodeError, UnicodeDecodeError) as err:
+            raise PumpError(f"Pump returned an unreadable response: {err}") from err
+        if not isinstance(payload, dict):
+            raise PumpError(f"Pump returned JSON that is not an object: {type(payload).__name__}")
+        return payload
 
     async def get_status(self) -> dict[str, Any]:
         """Fetch the current pump status."""
         url = f"http://{self._host}/cgi-bin/EpvCgi?name=AllRd&val=0&type=get&time=Date.now()"
-        return await self._make_request(url)
+        status = await self._make_request(url)
+        if not status:
+            raise PumpError("Pump returned an empty status")
+        return status
 
-    async def set_key(self, key: str, value: int) -> int:
-        """Set a supported pump command key to the given value."""
+    async def set_key(self, key: str, value: int) -> str:
+        """Set a supported pump command key to the given value and return the value the pump echoed."""
         safe_key = quote(str(key), safe="")
         url = f"http://{self._host}/cgi-bin/EpvCgi?name={safe_key}&val={int(value)}&type=set&time=Date.now()"
         json_data = await self._make_request(url)
-        result = json_data.get(key, None)
+        result = json_data.get(key)
         if result is None:
-            raise HomeAssistantError(f"Pump did not acknowledge command '{key}'")
-        return result
+            raise PumpError(f"Pump did not acknowledge command '{key}'")
+        return str(result)

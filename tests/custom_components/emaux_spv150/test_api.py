@@ -3,10 +3,12 @@
 from unittest.mock import MagicMock
 
 import pytest
-from aiohttp import ClientError
-from homeassistant.exceptions import HomeAssistantError
+from aiohttp import ClientConnectorError, ClientError, ClientResponseError, RequestInfo
+from aiohttp.client_reqrep import ConnectionKey
+from multidict import CIMultiDict, CIMultiDictProxy
+from yarl import URL
 
-from custom_components.emaux_spv150.api import PumpAPI
+from custom_components.emaux_spv150.api import PumpAPI, PumpError
 
 
 class _FakeResponse:
@@ -22,7 +24,7 @@ class _FakeResponse:
     async def text(self) -> str:
         return self._text
 
-    async def __aenter__(self) -> "_FakeResponse":
+    async def __aenter__(self) -> _FakeResponse:
         if self._enter_exc is not None:
             raise self._enter_exc
         return self
@@ -45,33 +47,44 @@ async def test_get_status_success():
 
 
 @pytest.mark.asyncio
-async def test_get_status_client_error_returns_empty():
+async def test_get_status_client_error_raises():
     api = PumpAPI("192.168.1.50", _session(enter_exc=ClientError("connection refused")))
-    assert await api.get_status() == {}
+    with pytest.raises(PumpError, match="Pump request failed: ClientError"):
+        await api.get_status()
 
 
 @pytest.mark.asyncio
-async def test_get_status_timeout_returns_empty():
-    api = PumpAPI("192.168.1.50", _session(enter_exc=TimeoutError()))
-    assert await api.get_status() == {}
+async def test_get_status_timeout_raises():
+    api = PumpAPI("192.168.1.50", _session(enter_exc=TimeoutError()), timeout=7)
+    with pytest.raises(PumpError, match="timed out after 7s"):
+        await api.get_status()
 
 
 @pytest.mark.asyncio
-async def test_get_status_invalid_json_returns_empty():
+async def test_get_status_invalid_json_raises():
     api = PumpAPI("192.168.1.50", _session("<html>500 error</html>"))
-    assert await api.get_status() == {}
+    with pytest.raises(PumpError, match="unreadable"):
+        await api.get_status()
+
+
+@pytest.mark.asyncio
+async def test_get_status_empty_object_raises():
+    """An empty status carries no reading: it is a failure, not a pump with every value unknown."""
+    api = PumpAPI("192.168.1.50", _session("{}"))
+    with pytest.raises(PumpError, match="empty status"):
+        await api.get_status()
 
 
 @pytest.mark.asyncio
 async def test_set_key_success():
     api = PumpAPI("192.168.1.50", _session('{"SetCurrentSpeed": 1800}'))
-    assert await api.set_key("SetCurrentSpeed", 1800) == 1800
+    assert await api.set_key("SetCurrentSpeed", 1800) == "1800"
 
 
 @pytest.mark.asyncio
 async def test_set_key_not_acknowledged_raises():
     api = PumpAPI("192.168.1.50", _session("{}"))
-    with pytest.raises(HomeAssistantError, match="did not acknowledge"):
+    with pytest.raises(PumpError, match="did not acknowledge"):
         await api.set_key("SetCurrentSpeed", 1800)
 
 
@@ -84,3 +97,47 @@ async def test_set_key_url_is_encoded():
     # The raw "&" must be percent-encoded so it cannot inject extra params.
     assert "Weird&Key" not in called_url
     assert "Weird%26Key" in called_url
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("payload", ["[1, 2]", "null", '"busy"'])
+async def test_get_status_non_object_json_raises(payload):
+    """Valid JSON that is not an object is a failure, not a crash of the poll."""
+    api = PumpAPI("192.168.1.50", _session(payload))
+    with pytest.raises(PumpError, match="not an object"):
+        await api.get_status()
+
+
+@pytest.mark.asyncio
+async def test_get_status_undecodable_body_raises():
+    """A body that is not valid text is a failure, not a crash of the poll."""
+    response = _FakeResponse()
+    response.text = MagicMock(side_effect=UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte"))
+    session = MagicMock()
+    session.get = MagicMock(return_value=response)
+    api = PumpAPI("192.168.1.50", session)
+    with pytest.raises(PumpError, match="unreadable"):
+        await api.get_status()
+
+
+def _connector_error() -> ClientConnectorError:
+    key = ConnectionKey("192.168.1.50", 80, False, True, None, None, None)
+    return ClientConnectorError(key, OSError(113, "No route to host"))
+
+
+def _http_error() -> ClientResponseError:
+    url = URL("http://192.168.1.50/cgi-bin/EpvCgi")
+    request = RequestInfo(url, "GET", CIMultiDictProxy(CIMultiDict()), url)
+    return ClientResponseError(request, (), status=500, message="Internal Server Error")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error", [_connector_error(), _http_error()], ids=["connect", "http"])
+async def test_errors_never_carry_the_pump_address(error):
+    """aiohttp messages contain host:port; the error shown in the UI and logs must not reveal the LAN layout."""
+    api = PumpAPI("192.168.1.50", _session(enter_exc=error))
+
+    with pytest.raises(PumpError) as exc_info:
+        await api.get_status()
+
+    assert "192.168.1.50" not in str(exc_info.value)

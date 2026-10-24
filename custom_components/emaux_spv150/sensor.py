@@ -1,6 +1,7 @@
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import override
 
 from homeassistant.components.sensor import (
     RestoreSensor,
@@ -10,20 +11,23 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import (
+    EntityCategory,
     UnitOfEnergy,
     UnitOfPower,
     UnitOfTime,
     UnitOfVolumeFlowRate,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .coordinator import PumpConfigEntry, PumpCoordinator
 from .entity import PumpBaseEntity
+from .models import to_float
 
 _LOGGER = logging.getLogger(__name__)
 
-PARALLEL_UPDATES = 1
+# Read-only entities refreshed by the coordinator: no update limit needed.
+PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -40,7 +44,6 @@ SENSOR_DESCRIPTIONS: tuple[PumpSensorDescription, ...] = (
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:flash",
         value_fn=lambda c: c.data.current_watts,
     ),
     PumpSensorDescription(
@@ -50,29 +53,28 @@ SENSOR_DESCRIPTIONS: tuple[PumpSensorDescription, ...] = (
         suggested_unit_of_measurement=UnitOfVolumeFlowRate.LITERS_PER_MINUTE,
         device_class=SensorDeviceClass.VOLUME_FLOW_RATE,
         state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:water-pump",
         value_fn=lambda c: c.data.current_gpm,
     ),
     PumpSensorDescription(
         key="uptime_hours",
         translation_key="uptime_hours",
+        entity_category=EntityCategory.DIAGNOSTIC,
         native_unit_of_measurement=UnitOfTime.HOURS,
         device_class=SensorDeviceClass.DURATION,
         state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:clock-start",
         value_fn=lambda c: c.uptime_hours,
     ),
 )
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: PumpConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: PumpConfigEntry, async_add_entities: AddConfigEntryEntitiesCallback
 ) -> None:
     """Set up Emaux SPV150 sensor entities."""
     coordinator: PumpCoordinator = entry.runtime_data
     entities: list[SensorEntity] = [PumpSensor(coordinator, description) for description in SENSOR_DESCRIPTIONS]
     entities.append(PumpEnergySensor(coordinator))
-    async_add_entities(entities, update_before_add=True)
+    async_add_entities(entities)
 
 
 class PumpSensor(PumpBaseEntity, SensorEntity):
@@ -86,6 +88,7 @@ class PumpSensor(PumpBaseEntity, SensorEntity):
         self._attr_unique_id = f"spv150_{description.key}"
 
     @property
+    @override
     def native_value(self) -> float | None:
         """Return the current sensor value via the description's value_fn."""
         return self.entity_description.value_fn(self.coordinator)
@@ -98,23 +101,26 @@ class PumpEnergySensor(PumpBaseEntity, RestoreSensor):
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
     _attr_device_class = SensorDeviceClass.ENERGY
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
-    _attr_icon = "mdi:lightning-bolt-circle"
 
     def __init__(self, coordinator: PumpCoordinator) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = "spv150_energy_kwh"
 
+    @override
     async def async_added_to_hass(self) -> None:
         """Restore the last known energy value on startup."""
         await super().async_added_to_hass()
         last = await self.async_get_last_sensor_data()
-        if last is not None and last.native_value is not None:
-            try:
-                self.coordinator.restore_energy(float(last.native_value))
-            except (ValueError, TypeError):
-                _LOGGER.warning("Could not restore energy value: %s", last.native_value)
+        if last is None or last.native_value is None:
+            return
+        energy = to_float(last.native_value)
+        if energy is None:
+            _LOGGER.warning("Could not restore energy value: %s", last.native_value)
+            return
+        self.coordinator.restore_energy(energy)
 
     @property
+    @override
     def native_value(self) -> float | None:
         """Return cumulated energy in kWh from coordinator."""
         return self.coordinator.energy_kwh

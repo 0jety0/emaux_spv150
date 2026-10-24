@@ -1,9 +1,9 @@
 [project]
 name = "emaux-spv150"
-version = "2.1.0"
+version = "2.3.0"
 description = "Home Assistant custom integration for the Emaux SPV150 variable-speed pool pump"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14.2"
 license = "PolyForm-Noncommercial-1.0.0"
 license-files = ["LICENSE"]
 authors = [{ name = "0jety0" }]
@@ -14,6 +14,7 @@ dependencies = []
 [dependency-groups]
 dev = [
     "homeassistant",
+    "mypy",
     "pytest",
     "pytest-asyncio",
     "pytest-homeassistant-custom-component",
@@ -27,7 +28,7 @@ package = false
 
 [tool.ruff]
 line-length = 120
-target-version = "py313"
+target-version = "py314"
 src = ["custom_components", "tests"]
 
 [tool.ruff.lint]
@@ -46,6 +47,16 @@ select = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["custom_components"]
+
+[tool.mypy]
+# Same strictness as Home Assistant core (core/mypy.ini) for the integration code.
+python_version = "3.14"
+files = ["custom_components/emaux_spv150"]
+strict = true
+warn_unreachable = true
+local_partial_types = true
+strict_bytes = true
+enable_error_code = ["deprecated", "explicit-override", "ignore-without-code", "redundant-self", "truthy-iterable"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

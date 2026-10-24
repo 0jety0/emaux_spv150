@@ -1,0 +1,15 @@
+name: Validate with hassfest
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron:  '0 0 * * *'
+
+jobs:
+  validate:
+    runs-on: "ubuntu-latest"
+    steps:
+        - uses: "actions/checkout@v7.0.1"
+        # No usable release tag (the only one, 1.0.0, predates hassfest): pinned to master@2026-10-16.
+        - uses: "home-assistant/actions/hassfest@cd6f3635a740c84d8a14f6121a90068b8ece6bf6"
