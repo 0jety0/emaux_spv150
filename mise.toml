@@ -21,3 +21,7 @@ run = ["uv run ruff format .", "uv run ruff check --fix ."]
 [tasks.test]
 description = "Run the test suite"
 run = "uv run pytest -q"
+
+[tasks.docs]
+description = "Redraw the solar mode chart of the README (img/regulation-*.svg) from the regulator code"
+run = "uv run python -m scripts.regulation_chart"
