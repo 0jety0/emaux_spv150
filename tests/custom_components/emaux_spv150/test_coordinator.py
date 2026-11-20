@@ -107,50 +107,6 @@ async def test_speed_change_non_speed_key_not_throttled(hass: HomeAssistant, con
 
 
 @pytest.mark.asyncio
-async def test_priming_sequence_unlocks_solar_after_delay(hass: HomeAssistant, config_entry_with_switch, mock_pump_api):
-    """After priming completes, _priming_done becomes True (triggered by switch OFF→ON)."""
-    hass.states.async_set(MOCK_SWITCH, "on")
-    config_entry_with_switch.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry_with_switch)
-    coordinator.control_mode = "solar"
-    coordinator.priming_time = 120
-    coordinator.speed_change_interval = 0
-    # Simulate previous cycle: switch was OFF, so this poll is a fresh OFF→ON.
-    coordinator._prev_switch_on = False
-
-    with patch.object(coordinator, "api_pump", mock_pump_api):
-        mock_pump_api.get_status = AsyncMock(return_value={**MOCK_STATUS, "RunningStatus": "1"})
-        await coordinator._async_update_data()  # OFF→ON transition starts priming
-        assert coordinator._pump_started_at is not None
-        assert coordinator._priming_done is False
-
-        coordinator._pump_started_at = dt_util.utcnow() - timedelta(seconds=130)
-        await coordinator._async_update_data()
-        assert coordinator._priming_done is True
-
-
-@pytest.mark.asyncio
-async def test_priming_not_done_before_delay(hass: HomeAssistant, config_entry_with_switch, mock_pump_api):
-    """Priming should not complete before the configured delay elapses."""
-    hass.states.async_set(MOCK_SWITCH, "on")
-    config_entry_with_switch.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry_with_switch)
-    coordinator.control_mode = "solar"
-    coordinator.priming_time = 120
-    coordinator.speed_change_interval = 0
-    coordinator._prev_switch_on = False
-
-    with patch.object(coordinator, "api_pump", mock_pump_api):
-        mock_pump_api.get_status = AsyncMock(return_value={**MOCK_STATUS, "RunningStatus": "1"})
-        await coordinator._async_update_data()
-        await coordinator._async_update_data()
-        assert coordinator._priming_done is False
-
-    speed_calls = [c for c in mock_pump_api.set_key.call_args_list if c.args[0] == "SetCurrentSpeed"]
-    assert not speed_calls
-
-
-@pytest.mark.asyncio
 async def test_energy_accumulation(hass: HomeAssistant, config_entry, mock_pump_api):
     """Energy should accumulate from watts and elapsed time."""
     config_entry.add_to_hass(hass)

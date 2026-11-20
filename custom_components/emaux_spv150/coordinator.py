@@ -158,9 +158,8 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         self._last_speed_change_time: datetime | None = None
         self._speed_change_lock = asyncio.Lock()
 
-        # Startup priming tracking (True = no priming needed until switch OFF→ON)
+        # Priming: set when the switch turns OFF→ON, cleared once priming_time has elapsed (None = not priming)
         self._pump_started_at: datetime | None = None
-        self._priming_done: bool = True
         self._prev_switch_on: bool = True
 
         # True once a missing or stale grid sensor has been logged, until it is usable again
@@ -422,7 +421,6 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         if not switch_on:
             # Priming starts again on the next OFF→ON flip of the switch.
             self._pump_started_at = None
-            self._priming_done = True
             self._prev_switch_on = False
             return self._powered_off()
 
@@ -456,26 +454,21 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         if self.switch_entity_id:
             if switch_on and not self._prev_switch_on:
                 self._pump_started_at = dt_util.utcnow()
-                self._priming_done = False
                 _LOGGER.debug("Switch turned ON: priming window of %ds begins", self.priming_time)
             self._prev_switch_on = switch_on
 
         # After priming window elapses, unlock solar regulation
-        if (
-            status.running
-            and self.control_mode == ControlMode.SOLAR
-            and not self._priming_done
-            and self._pump_started_at is not None
-        ):
+        if status.running and self.control_mode == ControlMode.SOLAR and self._pump_started_at is not None:
             elapsed = (dt_util.utcnow() - self._pump_started_at).total_seconds()
             if elapsed >= self.priming_time:
                 _LOGGER.debug("Priming complete after %.0fs — handing off to solar regulation", elapsed)
-                self._priming_done = True
+                self._pump_started_at = None
 
+        priming = self._pump_started_at is not None
         if (
             status.running
             and self.control_mode == ControlMode.SOLAR
-            and self._priming_done
+            and not priming
             and status.current_speed is not None
         ):
             await self._apply_solar_regulation(int(status.current_speed))
