@@ -5,6 +5,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.3.3] — 2026-11-20
+
 ### Fixed
 
 - **Grid meter in kW**: a grid-power sensor reporting in kW (or MW) is converted to watts. An export of 2 kW was
