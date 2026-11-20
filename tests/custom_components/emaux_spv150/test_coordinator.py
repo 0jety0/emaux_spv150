@@ -10,7 +10,7 @@ from homeassistant.util import dt as dt_util
 from custom_components.emaux_spv150.api import PumpError
 from custom_components.emaux_spv150.coordinator import PumpCoordinator, SpeedChangeThrottled
 
-from .conftest import MOCK_STATUS, MOCK_SWITCH
+from .conftest import MOCK_GRID, MOCK_STATUS, MOCK_SWITCH, setup_integration
 
 
 @pytest.mark.asyncio
@@ -453,3 +453,33 @@ async def test_throttled_solar_step_is_skipped_quietly(hass: HomeAssistant, conf
 
     mock_pump_api.set_key.assert_awaited_once()
     assert "failed" not in caplog.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("state", "attributes"),
+    [("-2000", {"unit_of_measurement": "W"}), ("-2", {"unit_of_measurement": "kW"}), ("-2000", {})],
+    ids=["W", "kW", "no_unit"],
+)
+async def test_solar_regulation_reads_the_grid_power_in_its_unit(
+    hass: HomeAssistant, solar_entry, mock_pump_api, state, attributes
+):
+    """A grid sensor in kW exporting 2 kW speeds the pump up as much as one exporting 2000 W."""
+    hass.states.async_set(MOCK_GRID, state, attributes)
+
+    await setup_integration(hass, solar_entry)
+
+    # error = 0 - (-2000) = 2000 -> step capped to step_up 300 -> 1500 + 300
+    mock_pump_api.set_key.assert_awaited_once_with("SetCurrentSpeed", 1800)
+
+
+@pytest.mark.asyncio
+async def test_solar_regulation_ignores_a_grid_power_in_an_unknown_unit(
+    hass: HomeAssistant, solar_entry, mock_pump_api
+):
+    """A grid reading that cannot be converted to watts never moves the pump."""
+    hass.states.async_set(MOCK_GRID, "-2000", {"unit_of_measurement": "VA"})
+
+    await setup_integration(hass, solar_entry)
+
+    mock_pump_api.set_key.assert_not_called()

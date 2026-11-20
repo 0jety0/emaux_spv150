@@ -3,13 +3,14 @@ from datetime import datetime, timedelta
 from typing import Any, override
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-from homeassistant.const import CONF_HOST, STATE_OFF, STATE_ON
-from homeassistant.core import Event, EventStateChangedData, HomeAssistant, callback
+from homeassistant.const import ATTR_UNIT_OF_MEASUREMENT, CONF_HOST, STATE_OFF, STATE_ON, UnitOfPower
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, State, callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
+from homeassistant.util.unit_conversion import PowerConverter
 
 from .api import PumpAPI, PumpError
 from .const import (
@@ -87,6 +88,18 @@ def is_pump_expected_on(hass: HomeAssistant, entity_id: str | None) -> bool:
         return True
     state = hass.states.get(entity_id)
     return state is not None and state.state.lower() == STATE_ON
+
+
+def grid_power_watts(state: State) -> float | None:
+    """Return the grid power of a sensor state in W, or None when it is not a usable power reading.
+
+    The grid selector accepts any power sensor (W, kW, MW...); a sensor without a unit is taken as W.
+    """
+    value = to_float(state.state)
+    unit = state.attributes.get(ATTR_UNIT_OF_MEASUREMENT) or UnitOfPower.WATT
+    if value is None or unit not in PowerConverter.VALID_UNITS:
+        return None
+    return PowerConverter.convert(value, unit, UnitOfPower.WATT)
 
 
 class SpeedChangeThrottled(ServiceValidationError):
@@ -358,7 +371,7 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
             _LOGGER.warning("Grid power entity '%s' not found", self.grid_power_entity)
             return
 
-        grid_power = to_float(grid_state.state)
+        grid_power = grid_power_watts(grid_state)
         if grid_power is None:
             return
 
