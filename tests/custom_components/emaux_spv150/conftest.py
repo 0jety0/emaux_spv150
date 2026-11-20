@@ -1,7 +1,10 @@
+from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
+from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 
 from custom_components.emaux_spv150.const import DOMAIN
 
@@ -36,7 +39,7 @@ def mock_pump_api():
 def config_entry():
     return MockConfigEntry(
         domain=DOMAIN,
-        data={"host": MOCK_HOST, "switch_entity": None},
+        data={"host": MOCK_HOST, "switch_entity": ""},
         options={},
         entry_id="test_entry_id",
         unique_id=MOCK_HOST,
@@ -67,8 +70,32 @@ def solar_entry():
     )
 
 
-async def setup_integration(hass, entry) -> None:
+@pytest.fixture
+async def init_integration(hass: HomeAssistant, config_entry, mock_pump_api) -> MockConfigEntry:
+    """The default entry, set up with a pump that answers MOCK_STATUS."""
+    await setup_integration(hass, config_entry)
+    return config_entry
+
+
+async def setup_integration(hass: HomeAssistant, entry) -> None:
     """Add the entry to Home Assistant and set it up."""
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
+
+
+async def poll_after(hass: HomeAssistant, freezer, delay: timedelta) -> None:
+    """Let time pass and run the poll that is due."""
+    freezer.tick(delay)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+
+def entity_id(hass: HomeAssistant, platform: str, key: str) -> str:
+    """Entity ID of one of the pump entities, found by its unique ID."""
+    return er.async_get(hass).async_get_entity_id(platform, DOMAIN, f"spv150_{key}")
+
+
+def state(hass: HomeAssistant, platform: str, key: str) -> str:
+    """Current state of one of the pump entities."""
+    return hass.states.get(entity_id(hass, platform, key)).state

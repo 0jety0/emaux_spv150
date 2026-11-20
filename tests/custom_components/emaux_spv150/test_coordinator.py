@@ -1,414 +1,105 @@
+"""Polling, energy, uptime, commands and solar regulation, tested through Home Assistant."""
+
 import asyncio
 import logging
 from datetime import timedelta
-from unittest.mock import AsyncMock, patch
+from unittest.mock import call
 
 import pytest
+from homeassistant.const import STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.update_coordinator import UpdateFailed
-from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 
 from custom_components.emaux_spv150.api import PumpError
 from custom_components.emaux_spv150.const import DOMAIN
-from custom_components.emaux_spv150.coordinator import PumpCoordinator, SpeedChangeThrottled
+from custom_components.emaux_spv150.coordinator import SpeedChangeThrottled
 
-from .conftest import MOCK_GRID, MOCK_HOST, MOCK_STATUS, MOCK_SWITCH, setup_integration
+from .conftest import MOCK_GRID, MOCK_HOST, MOCK_STATUS, MOCK_SWITCH, entity_id, poll_after, setup_integration, state
 
+POLL = timedelta(seconds=30)
+UNREACHABLE = PumpError("connection refused")
 
-@pytest.mark.asyncio
-async def test_update_data_success(hass: HomeAssistant, config_entry, mock_pump_api):
-    """Coordinator should return a typed PumpStatus on a successful poll."""
-    config_entry.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry)
 
-    with patch.object(coordinator, "api_pump", mock_pump_api):
-        data = await coordinator._async_update_data()
-
-    assert data.current_watts == 300.0
-    assert data.current_speed == 1500.0
-    assert data.speed_selected == 2
-    assert data.running is True
-
-
-@pytest.mark.asyncio
-async def test_running_status_normalised_from_int(hass: HomeAssistant, config_entry, mock_pump_api):
-    """RunningStatus should be parsed correctly even if the pump returns an int."""
-    config_entry.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry)
-    mock_pump_api.get_status = AsyncMock(return_value={**MOCK_STATUS, "RunningStatus": 1})
-
-    with patch.object(coordinator, "api_pump", mock_pump_api):
-        data = await coordinator._async_update_data()
-
-    assert data.running is True
-
-
-@pytest.mark.asyncio
-async def test_update_data_pump_error_raises(hass: HomeAssistant, config_entry, mock_pump_api):
-    """A pump that cannot be read makes the poll fail with a translated message."""
-    config_entry.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry)
-    mock_pump_api.get_status = AsyncMock(side_effect=PumpError("connection refused"))
-
-    with patch.object(coordinator, "api_pump", mock_pump_api), pytest.raises(UpdateFailed) as exc_info:
-        await coordinator._async_update_data()
-
-    assert exc_info.value.translation_key == "update_failed"
-    assert exc_info.value.translation_placeholders == {"error": "connection refused"}
-
-
-@pytest.mark.asyncio
-async def test_update_data_switch_off(hass: HomeAssistant, config_entry_with_switch, mock_pump_api):
-    """When the linked switch is OFF, coordinator returns zeroed data without calling the API."""
-    hass.states.async_set(MOCK_SWITCH, "off")
-    config_entry_with_switch.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry_with_switch)
-
-    with patch.object(coordinator, "api_pump", mock_pump_api):
-        data = await coordinator._async_update_data()
-
-    assert data.current_watts == 0.0
-    assert data.running is False
-    assert coordinator.pump_powered_off is True
-    mock_pump_api.get_status.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_speed_change_throttle(hass: HomeAssistant, config_entry, mock_pump_api):
-    """Speed changes should be blocked within the throttle interval."""
-    config_entry.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry)
-    coordinator.speed_change_interval = 60
-
-    with patch.object(coordinator, "api_pump", mock_pump_api):
-        await coordinator.async_set_pump_key("SetCurrentSpeed", 1500)
-        with pytest.raises(SpeedChangeThrottled) as exc_info:
-            await coordinator.async_set_pump_key("SetCurrentSpeed", 1800)
-
-    assert exc_info.value.translation_key == "speed_change_throttled"
-    assert mock_pump_api.set_key.call_count == 1
-
-
-@pytest.mark.asyncio
-async def test_speed_change_non_speed_key_not_throttled(hass: HomeAssistant, config_entry, mock_pump_api):
-    """Non-speed commands (e.g. RunStop) should not be throttled."""
-    config_entry.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry)
-    coordinator.speed_change_interval = 60
-
-    with patch.object(coordinator, "api_pump", mock_pump_api):
-        await coordinator.async_set_pump_key("RunStop", 1)
-        await coordinator.async_set_pump_key("RunStop", 0)
-
-    assert mock_pump_api.set_key.call_count == 2
-
-
-@pytest.mark.asyncio
-async def test_energy_accumulation(hass: HomeAssistant, config_entry, mock_pump_api):
-    """Energy should accumulate from watts and elapsed time."""
-    config_entry.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry)
-    mock_pump_api.get_status = AsyncMock(return_value={**MOCK_STATUS, "CurrentWatts": "1000"})
-
-    with patch.object(coordinator, "api_pump", mock_pump_api):
-        await coordinator._async_update_data()  # first poll: anchor, no accumulation
-        assert coordinator.energy_kwh == 0.0
-
-        coordinator._last_energy_update = dt_util.utcnow() - timedelta(hours=1)
-        await coordinator._async_update_data()  # 1000 W for 1 h = 1 kWh
-        assert coordinator.energy_kwh == pytest.approx(1.0, abs=0.01)
-
-
-@pytest.mark.asyncio
-async def test_energy_not_counted_while_switch_off(
-    hass: HomeAssistant, config_entry_with_switch, mock_pump_api, freezer
-):
-    """Hours spent with the power switch OFF must not be billed at the next running poll."""
-    hass.states.async_set(MOCK_SWITCH, "on")
-    config_entry_with_switch.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry_with_switch)
-    mock_pump_api.get_status = AsyncMock(return_value={**MOCK_STATUS, "CurrentWatts": "1000"})
-
-    with patch.object(coordinator, "api_pump", mock_pump_api):
-        await coordinator._async_update_data()
-        hass.states.async_set(MOCK_SWITCH, "off")
-        await coordinator._async_update_data()
-        freezer.tick(timedelta(hours=12))
-        hass.states.async_set(MOCK_SWITCH, "on")
-        await coordinator._async_update_data()
-
-    assert coordinator.energy_kwh == 0.0
-
-
-@pytest.mark.asyncio
-async def test_energy_not_counted_across_failed_polls(hass: HomeAssistant, config_entry, mock_pump_api, freezer):
-    """A pump outage must not be billed at full power once it answers again."""
-    config_entry.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry)
-    mock_pump_api.get_status = AsyncMock(return_value={**MOCK_STATUS, "CurrentWatts": "1000"})
-
-    with patch.object(coordinator, "api_pump", mock_pump_api):
-        await coordinator._async_update_data()
-        mock_pump_api.get_status.side_effect = PumpError("connection refused")
-        with pytest.raises(UpdateFailed):
-            await coordinator._async_update_data()
-        freezer.tick(timedelta(hours=12))
-        mock_pump_api.get_status.side_effect = None
-        await coordinator._async_update_data()
-
-    assert coordinator.energy_kwh == 0.0
-
-
-@pytest.mark.asyncio
-async def test_uptime_tracking_and_reset(hass: HomeAssistant, config_entry, mock_pump_api):
-    """Uptime should start when running and reset to None when stopped."""
-    config_entry.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry)
-
-    with patch.object(coordinator, "api_pump", mock_pump_api):
-        mock_pump_api.get_status = AsyncMock(return_value={**MOCK_STATUS, "RunningStatus": "1"})
-        await coordinator._async_update_data()
-        assert coordinator._uptime_start is not None
-
-        coordinator._uptime_start = dt_util.utcnow() - timedelta(hours=2)
-        assert coordinator.uptime_hours == pytest.approx(2.0, abs=0.1)
-
-        mock_pump_api.get_status = AsyncMock(return_value={**MOCK_STATUS, "RunningStatus": "0"})
-        await coordinator._async_update_data()
-        assert coordinator._uptime_start is None
-        assert coordinator.uptime_hours is None
-
-
-@pytest.mark.asyncio
-async def test_solar_regulation_speeds_up_when_exporting(hass: HomeAssistant, config_entry, mock_pump_api):
-    """Grid power below the dead band lower bound should speed the pump up."""
-    config_entry.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry)
-    coordinator.grid_power_entity = "sensor.grid_power"
-    coordinator.setpoint = 1000
-    coordinator.dead_band_lower = 500
-    coordinator.dead_band_upper = 1500
-    coordinator.step_up = 200
-    coordinator.rpm_min_solar = 800
-    coordinator.rpm_max_solar = 3400
-
-    hass.states.async_set("sensor.grid_power", "200")  # below lower bound
-
-    with patch.object(coordinator, "api_pump", mock_pump_api):
-        await coordinator._apply_solar_regulation(1500)
-
-    # error = 1000 - 200 = 800 → step = min(200, 800) = 200 → 1700
-    mock_pump_api.set_key.assert_called_once_with("SetCurrentSpeed", 1700)
-
-
-@pytest.mark.asyncio
-async def test_failed_solar_command_keeps_the_poll_result(hass: HomeAssistant, config_entry, mock_pump_api):
-    """A rejected speed command must not throw away the status that was read successfully."""
-    config_entry.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry)
-    coordinator.control_mode = "solar"
-    coordinator.grid_power_entity = "sensor.grid_power"
-    hass.states.async_set("sensor.grid_power", "-2000")  # exporting: regulator speeds up
-    mock_pump_api.set_key = AsyncMock(side_effect=PumpError("pump refused"))
-
-    with patch.object(coordinator, "api_pump", mock_pump_api):
-        data = await coordinator._async_update_data()
-
-    assert data.current_speed == 1500.0
-    mock_pump_api.set_key.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_failed_speed_command_does_not_arm_the_throttle(hass: HomeAssistant, config_entry, mock_pump_api):
-    """A speed command that failed must not block the next one for the throttle interval."""
-    config_entry.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry)
-    coordinator.speed_change_interval = 60
-    mock_pump_api.set_key = AsyncMock(side_effect=[PumpError("pump refused"), "1800"])
-
-    with patch.object(coordinator, "api_pump", mock_pump_api):
-        with pytest.raises(HomeAssistantError):
-            await coordinator.async_set_pump_key("SetCurrentSpeed", 1500)
-        result = await coordinator.async_set_pump_key("SetCurrentSpeed", 1800)
-
-    assert result == "1800"
-
-
-@pytest.mark.asyncio
-async def test_solar_regulation_acts_on_a_steady_but_fresh_grid_value(
-    hass: HomeAssistant, config_entry, mock_pump_api, freezer
-):
-    """A grid sensor re-reporting the same value is fresh: a steady export must still be regulated."""
-    config_entry.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry)
-    coordinator.grid_power_entity = "sensor.grid_power"
-    hass.states.async_set("sensor.grid_power", "-2000")
-    freezer.tick(timedelta(seconds=120))
-    hass.states.async_set("sensor.grid_power", "-2000")  # same value, reported again
-
-    with patch.object(coordinator, "api_pump", mock_pump_api):
-        await coordinator._apply_solar_regulation(1500)
-
-    mock_pump_api.set_key.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_solar_regulation_ignores_stale_grid(hass: HomeAssistant, config_entry, mock_pump_api):
-    """Stale grid power (> staleness threshold) must not trigger a speed change."""
-    config_entry.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry)
-    coordinator.grid_power_entity = "sensor.grid_power"
-    coordinator.dead_band_lower = 500
-    coordinator.dead_band_upper = 1500
-
-    hass.states.async_set("sensor.grid_power", "200")
-    # Make "now" 120 s after the state was set so it is considered stale.
-    future = dt_util.utcnow() + timedelta(seconds=120)
-    with (
-        patch("custom_components.emaux_spv150.coordinator.dt_util.utcnow", return_value=future),
-        patch.object(coordinator, "api_pump", mock_pump_api),
-    ):
-        await coordinator._apply_solar_regulation(1500)
-
-    mock_pump_api.set_key.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_solar_regulation_no_grid_entity_is_noop(hass: HomeAssistant, config_entry, mock_pump_api):
-    """With no grid power entity configured, regulation does nothing."""
-    config_entry.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry)
-    coordinator.grid_power_entity = ""
-
-    with patch.object(coordinator, "api_pump", mock_pump_api):
-        await coordinator._apply_solar_regulation(1500)
-
-    mock_pump_api.set_key.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_connection_settings_changed(hass: HomeAssistant, config_entry):
-    """Only host/switch/grid changes count as a connection change (reload trigger)."""
-    config_entry.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry)
-
-    assert coordinator.connection_settings_changed(config_entry) is False
-
-    coordinator.host = "10.0.0.1"
-    assert coordinator.connection_settings_changed(config_entry) is True
-
-
-@pytest.mark.asyncio
-async def test_apply_options_updates_live_params(hass: HomeAssistant, config_entry):
-    """apply_options pulls regulation params from entry options without a reload."""
-    config_entry.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry)
-
-    hass.config_entries.async_update_entry(
-        config_entry, options={**config_entry.options, "setpoint": 1234, "step_up": 250}
+async def _call(hass: HomeAssistant, platform: str, service: str, key: str, **data: float) -> None:
+    await hass.services.async_call(
+        platform, service, {"entity_id": entity_id(hass, platform, key), **data}, blocking=True
     )
-    coordinator.apply_options(config_entry)
-
-    assert coordinator.setpoint == 1234.0
-    assert coordinator.step_up == 250
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize("grid_entity", ["sensor.grid_power", "sensor.not_created"], ids=["unavailable", "missing"])
-async def test_solar_regulation_waits_for_a_numeric_grid_value(
-    hass: HomeAssistant, config_entry, mock_pump_api, grid_entity
-):
-    """A missing or non-numeric grid reading never moves the pump."""
-    config_entry.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry)
-    coordinator.control_mode = "solar"
-    coordinator.grid_power_entity = grid_entity
-    hass.states.async_set("sensor.grid_power", "unavailable")
-
-    with patch.object(coordinator, "api_pump", mock_pump_api):
-        await coordinator._async_update_data()
-
-    mock_pump_api.set_key.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_throttled_solar_step_is_skipped_quietly(hass: HomeAssistant, config_entry, mock_pump_api, caplog):
-    """The solar mode waits for the next allowed change without logging a warning at every poll."""
-    config_entry.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry)
-    coordinator.grid_power_entity = "sensor.grid_power"
-    coordinator.speed_change_interval = 60
-    hass.states.async_set("sensor.grid_power", "-2000")  # exporting: the regulator speeds up
-
-    with patch.object(coordinator, "api_pump", mock_pump_api):
-        await coordinator._apply_solar_regulation(1500)
-        await coordinator._apply_solar_regulation(1800)
-
-    mock_pump_api.set_key.assert_awaited_once()
-    assert "failed" not in caplog.text
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("state", "attributes"),
-    [("-2000", {"unit_of_measurement": "W"}), ("-2", {"unit_of_measurement": "kW"}), ("-2000", {})],
-    ids=["W", "kW", "no_unit"],
-)
-async def test_solar_regulation_reads_the_grid_power_in_its_unit(
-    hass: HomeAssistant, solar_entry, mock_pump_api, state, attributes
-):
-    """A grid sensor in kW exporting 2 kW speeds the pump up as much as one exporting 2000 W."""
-    hass.states.async_set(MOCK_GRID, state, attributes)
-
-    await setup_integration(hass, solar_entry)
-
-    # error = 0 - (-2000) = 2000 -> step capped to step_up 300 -> 1500 + 300
-    mock_pump_api.set_key.assert_awaited_once_with("SetCurrentSpeed", 1800)
-
-
-@pytest.mark.asyncio
-async def test_solar_regulation_ignores_a_grid_power_in_an_unknown_unit(
-    hass: HomeAssistant, solar_entry, mock_pump_api
-):
-    """A grid reading that cannot be converted to watts never moves the pump."""
-    hass.states.async_set(MOCK_GRID, "-2000", {"unit_of_measurement": "VA"})
-
-    await setup_integration(hass, solar_entry)
-
-    mock_pump_api.set_key.assert_not_called()
-
-
-async def _poll_after(hass: HomeAssistant, freezer, delay: timedelta) -> None:
-    """Let time pass and run the poll that is due."""
+async def _poll_with_fresh_grid(hass: HomeAssistant, freezer, delay: timedelta) -> None:
+    """Let time pass while the grid sensor keeps reporting an export, then run the poll that is due."""
     freezer.tick(delay)
+    hass.states.async_set(MOCK_GRID, "-2000")
     async_fire_time_changed(hass)
     await hass.async_block_till_done()
 
 
-def _state(hass: HomeAssistant, platform: str, key: str) -> str:
-    entity_id = er.async_get(hass).async_get_entity_id(platform, DOMAIN, f"spv150_{key}")
-    return hass.states.get(entity_id).state
+def _grid_logs(caplog, level: int) -> list[str]:
+    return [r.getMessage() for r in caplog.records if r.levelno == level and "Grid power entity" in r.getMessage()]
+
+
+# --- Reading the pump ---
 
 
 @pytest.mark.asyncio
-async def test_uptime_restarts_after_an_outage(hass: HomeAssistant, config_entry, mock_pump_api, freezer):
-    """Running time is unknown while the pump does not answer: uptime counts again from its recovery."""
+async def test_pump_status_is_shown(hass: HomeAssistant, init_integration):
+    """Each value read from the pump is shown by its entity."""
+    assert float(state(hass, "sensor", "current_watts")) == 300
+    assert float(state(hass, "number", "current_speed")) == 1500
+    assert float(state(hass, "number", "speed_selected")) == 2
+    assert state(hass, "switch", "running_status") == STATE_ON
+
+
+@pytest.mark.asyncio
+async def test_running_status_given_as_a_number_is_read(hass: HomeAssistant, config_entry, mock_pump_api):
+    """Some firmwares answer RunningStatus as a number instead of a string."""
+    mock_pump_api.get_status.return_value = {**MOCK_STATUS, "RunningStatus": 1}
+
     await setup_integration(hass, config_entry)
-    mock_pump_api.get_status.side_effect = PumpError("connection refused")
-    await _poll_after(hass, freezer, timedelta(seconds=30))
-    await _poll_after(hass, freezer, timedelta(hours=5))
 
-    mock_pump_api.get_status.side_effect = None
-    await _poll_after(hass, freezer, timedelta(seconds=30))
-
-    assert float(_state(hass, "sensor", "uptime_hours")) == 0
+    assert state(hass, "switch", "running_status") == STATE_ON
 
 
 @pytest.mark.asyncio
-async def test_concurrent_speed_changes_reach_the_pump_once(hass: HomeAssistant, config_entry, mock_pump_api):
+async def test_failed_poll_makes_the_pump_unavailable_with_the_reason(
+    hass: HomeAssistant, init_integration, mock_pump_api, freezer, caplog
+):
+    """A pump that cannot be read makes its values unavailable and the log says why."""
+    mock_pump_api.get_status.side_effect = UNREACHABLE
+
+    await poll_after(hass, freezer, POLL)
+
+    assert state(hass, "number", "current_speed") == STATE_UNAVAILABLE
+    assert "Could not read the pump status: connection refused" in caplog.text
+
+
+# --- Commands ---
+
+
+@pytest.mark.asyncio
+async def test_run_stop_commands_are_not_throttled(hass: HomeAssistant, init_integration, mock_pump_api):
+    """Only speed changes have a minimum interval: starting then stopping the pump at once both reach it."""
+    await _call(hass, "switch", "turn_on", "running_status")
+    await _call(hass, "switch", "turn_off", "running_status")
+
+    assert mock_pump_api.set_key.await_args_list == [call("RunStop", 1), call("RunStop", 2)]
+
+
+@pytest.mark.asyncio
+async def test_failed_speed_change_does_not_block_the_retry(hass: HomeAssistant, init_integration, mock_pump_api):
+    """A speed change the pump did not take must not start the minimum interval."""
+    mock_pump_api.set_key.side_effect = [UNREACHABLE, "1800"]
+    with pytest.raises(HomeAssistantError):
+        await _call(hass, "number", "set_value", "current_speed", value=1800)
+
+    await _call(hass, "number", "set_value", "current_speed", value=1800)
+
+    assert mock_pump_api.set_key.await_args_list == [call("SetCurrentSpeed", 1800), call("SetCurrentSpeed", 1800)]
+
+
+@pytest.mark.asyncio
+async def test_concurrent_speed_changes_reach_the_pump_once(hass: HomeAssistant, init_integration, mock_pump_api):
     """A manual speed change sent while the regulator's command is in flight is throttled, not sent too."""
 
     async def slow_set_key(key: str, value: int) -> str:
@@ -416,8 +107,7 @@ async def test_concurrent_speed_changes_reach_the_pump_once(hass: HomeAssistant,
         return str(value)
 
     mock_pump_api.set_key.side_effect = slow_set_key
-    await setup_integration(hass, config_entry)
-    coordinator = config_entry.runtime_data
+    coordinator = init_integration.runtime_data
 
     results = await asyncio.gather(
         coordinator.async_set_pump_key("SetCurrentSpeed", 1800),
@@ -430,8 +120,199 @@ async def test_concurrent_speed_changes_reach_the_pump_once(hass: HomeAssistant,
     mock_pump_api.set_key.assert_awaited_once_with("SetCurrentSpeed", 1800)
 
 
-def _grid_logs(caplog, level: int) -> list[str]:
-    return [r.getMessage() for r in caplog.records if r.levelno == level and "Grid power entity" in r.getMessage()]
+# --- Energy and uptime ---
+
+
+@pytest.mark.asyncio
+async def test_energy_is_integrated_from_the_pump_power(hass: HomeAssistant, config_entry, mock_pump_api, freezer):
+    """1000 W for one hour adds 1 kWh."""
+    mock_pump_api.get_status.return_value = {**MOCK_STATUS, "CurrentWatts": "1000"}
+    await setup_integration(hass, config_entry)
+
+    await poll_after(hass, freezer, timedelta(hours=1))
+
+    assert float(state(hass, "sensor", "energy_kwh")) == pytest.approx(1.0)
+
+
+@pytest.mark.asyncio
+async def test_energy_is_not_counted_while_the_pump_is_stopped(
+    hass: HomeAssistant, config_entry, mock_pump_api, freezer
+):
+    """A stopped pump (RunningStatus 0) uses no energy, whatever power value it still reports."""
+    mock_pump_api.get_status.return_value = {**MOCK_STATUS, "RunningStatus": "0", "CurrentWatts": "1000"}
+    await setup_integration(hass, config_entry)
+
+    await poll_after(hass, freezer, timedelta(hours=1))
+
+    assert float(state(hass, "sensor", "energy_kwh")) == 0
+
+
+@pytest.mark.asyncio
+async def test_energy_is_not_counted_while_the_switch_is_off(
+    hass: HomeAssistant, config_entry_with_switch, mock_pump_api, freezer
+):
+    """Hours spent with the power switch OFF must not be billed at the next running poll."""
+    mock_pump_api.get_status.return_value = {**MOCK_STATUS, "CurrentWatts": "1000"}
+    hass.states.async_set(MOCK_SWITCH, "on")
+    await setup_integration(hass, config_entry_with_switch)
+    hass.states.async_set(MOCK_SWITCH, "off")
+    await hass.async_block_till_done()
+    freezer.tick(timedelta(hours=12))
+
+    hass.states.async_set(MOCK_SWITCH, "on")
+    await hass.async_block_till_done()
+
+    assert float(state(hass, "sensor", "energy_kwh")) == 0
+
+
+@pytest.mark.asyncio
+async def test_energy_is_not_counted_across_an_outage(hass: HomeAssistant, config_entry, mock_pump_api, freezer):
+    """A pump outage must not be billed at full power once it answers again."""
+    mock_pump_api.get_status.return_value = {**MOCK_STATUS, "CurrentWatts": "1000"}
+    await setup_integration(hass, config_entry)
+    mock_pump_api.get_status.side_effect = UNREACHABLE
+    await poll_after(hass, freezer, POLL)
+
+    mock_pump_api.get_status.side_effect = None
+    await poll_after(hass, freezer, timedelta(hours=12))
+
+    assert float(state(hass, "sensor", "energy_kwh")) == 0
+
+
+@pytest.mark.asyncio
+async def test_uptime_counts_while_running_and_clears_when_stopped(
+    hass: HomeAssistant, init_integration, mock_pump_api, freezer
+):
+    """Uptime counts the hours since the pump started and is unknown once it stops."""
+    await poll_after(hass, freezer, timedelta(hours=2))
+
+    assert float(state(hass, "sensor", "uptime_hours")) == 2
+
+    mock_pump_api.get_status.return_value = {**MOCK_STATUS, "RunningStatus": "0"}
+    await poll_after(hass, freezer, POLL)
+
+    assert state(hass, "sensor", "uptime_hours") == STATE_UNKNOWN
+
+
+@pytest.mark.asyncio
+async def test_uptime_restarts_after_an_outage(hass: HomeAssistant, init_integration, mock_pump_api, freezer):
+    """Running time is unknown while the pump does not answer: uptime counts again from its recovery."""
+    mock_pump_api.get_status.side_effect = UNREACHABLE
+    await poll_after(hass, freezer, POLL)
+    await poll_after(hass, freezer, timedelta(hours=5))
+
+    mock_pump_api.get_status.side_effect = None
+    await poll_after(hass, freezer, POLL)
+
+    assert float(state(hass, "sensor", "uptime_hours")) == 0
+
+
+# --- Solar regulation ---
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("state_value", "attributes"),
+    [("-2000", {"unit_of_measurement": "W"}), ("-2", {"unit_of_measurement": "kW"}), ("-2000", {})],
+    ids=["W", "kW", "no_unit"],
+)
+async def test_solar_regulation_reads_the_grid_power_in_its_unit(
+    hass: HomeAssistant, solar_entry, mock_pump_api, state_value, attributes
+):
+    """A grid sensor in kW exporting 2 kW speeds the pump up as much as one exporting 2000 W."""
+    hass.states.async_set(MOCK_GRID, state_value, attributes)
+
+    await setup_integration(hass, solar_entry)
+
+    # error = 0 - (-2000) = 2000 -> step capped to step_up 300 -> 1500 + 300
+    mock_pump_api.set_key.assert_awaited_once_with("SetCurrentSpeed", 1800)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("grid_entity", "state_value", "attributes"),
+    [
+        (MOCK_GRID, "unavailable", {}),
+        ("sensor.other_grid_power", "-2000", {}),
+        (MOCK_GRID, "-2000", {"unit_of_measurement": "VA"}),
+    ],
+    ids=["unavailable", "missing", "unknown_unit"],
+)
+async def test_solar_regulation_waits_for_a_usable_grid_reading(
+    hass: HomeAssistant, solar_entry, mock_pump_api, grid_entity, state_value, attributes
+):
+    """A missing, non-numeric or non-power grid reading never moves the pump."""
+    hass.states.async_set(grid_entity, state_value, attributes)
+
+    await setup_integration(hass, solar_entry)
+
+    mock_pump_api.set_key.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_solar_mode_without_a_grid_sensor_leaves_the_speed_alone(hass: HomeAssistant, mock_pump_api):
+    """With no grid sensor configured the solar mode has nothing to regulate on."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"host": MOCK_HOST, "switch_entity": "", "grid_power_entity": ""},
+        options={"control_mode": "solar"},
+        unique_id=MOCK_HOST,
+    )
+
+    await setup_integration(hass, entry)
+
+    mock_pump_api.set_key.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_solar_regulation_acts_on_a_steady_but_fresh_grid_value(
+    hass: HomeAssistant, solar_entry, mock_pump_api, freezer
+):
+    """A grid sensor re-reporting the same value is fresh: a steady export must still be regulated."""
+    hass.states.async_set(MOCK_GRID, "-2000")
+    freezer.tick(timedelta(seconds=120))
+    hass.states.async_set(MOCK_GRID, "-2000")  # same value, reported again
+
+    await setup_integration(hass, solar_entry)
+
+    mock_pump_api.set_key.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_solar_regulation_ignores_a_stale_grid_value(hass: HomeAssistant, solar_entry, mock_pump_api, freezer):
+    """A grid reading older than the staleness limit must not trigger a speed change."""
+    hass.states.async_set(MOCK_GRID, "-2000")
+    freezer.tick(timedelta(seconds=120))
+
+    await setup_integration(hass, solar_entry)
+
+    mock_pump_api.set_key.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_failed_solar_command_keeps_the_poll_result(hass: HomeAssistant, solar_entry, mock_pump_api):
+    """A rejected speed command must not throw away the status that was read successfully."""
+    hass.states.async_set(MOCK_GRID, "-2000")  # exporting: the regulator speeds up
+    mock_pump_api.set_key.side_effect = UNREACHABLE
+
+    await setup_integration(hass, solar_entry)
+
+    assert float(state(hass, "number", "current_speed")) == 1500
+    mock_pump_api.set_key.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_throttled_solar_step_is_skipped_quietly(
+    hass: HomeAssistant, solar_entry, mock_pump_api, caplog, freezer
+):
+    """The solar mode waits for the next allowed change without logging a warning at every poll."""
+    hass.states.async_set(MOCK_GRID, "-2000")  # exporting: the regulator speeds up
+    await setup_integration(hass, solar_entry)
+
+    await _poll_with_fresh_grid(hass, freezer, POLL)
+
+    mock_pump_api.set_key.assert_awaited_once()
+    assert "failed" not in caplog.text
 
 
 @pytest.mark.asyncio
@@ -440,14 +321,14 @@ async def test_missing_grid_sensor_is_logged_once_until_it_appears(
 ):
     """A missing grid sensor is reported once, not at every poll, then once when regulation resumes."""
     await setup_integration(hass, solar_entry)
-    await _poll_after(hass, freezer, timedelta(seconds=30))
-    await _poll_after(hass, freezer, timedelta(seconds=30))
+    await poll_after(hass, freezer, POLL)
+    await poll_after(hass, freezer, POLL)
 
     assert _grid_logs(caplog, logging.WARNING) == ["Grid power entity 'sensor.grid_power' not found"]
 
     hass.states.async_set(MOCK_GRID, "50")
-    await _poll_after(hass, freezer, timedelta(seconds=30))
-    await _poll_after(hass, freezer, timedelta(seconds=30))
+    await poll_after(hass, freezer, POLL)
+    await poll_after(hass, freezer, POLL)
 
     assert _grid_logs(caplog, logging.INFO) == [
         "Grid power entity 'sensor.grid_power' usable again: solar regulation resumes"
@@ -461,24 +342,16 @@ async def test_stale_grid_sensor_is_logged_once_until_it_reports_again(
     """A grid sensor that stopped reporting is reported once, not at every poll, then once when it reports again."""
     hass.states.async_set(MOCK_GRID, "50")
     await setup_integration(hass, solar_entry)
-    await _poll_after(hass, freezer, timedelta(seconds=90))
-    await _poll_after(hass, freezer, timedelta(seconds=30))
+    await poll_after(hass, freezer, timedelta(seconds=90))
+    await poll_after(hass, freezer, POLL)
 
     assert len(_grid_logs(caplog, logging.WARNING)) == 1
 
     hass.states.async_set(MOCK_GRID, "50")
-    await _poll_after(hass, freezer, timedelta(seconds=30))
-    await _poll_after(hass, freezer, timedelta(seconds=30))
+    await poll_after(hass, freezer, POLL)
+    await poll_after(hass, freezer, POLL)
 
     assert len(_grid_logs(caplog, logging.INFO)) == 1
-
-
-async def _poll_with_fresh_grid(hass: HomeAssistant, freezer, delay: timedelta) -> None:
-    """Let time pass while the grid sensor keeps reporting an export, then run the poll that is due."""
-    freezer.tick(delay)
-    hass.states.async_set(MOCK_GRID, "-2000")
-    async_fire_time_changed(hass)
-    await hass.async_block_till_done()
 
 
 @pytest.mark.asyncio
@@ -497,23 +370,10 @@ async def test_solar_regulation_waits_for_the_priming_after_the_switch_turns_on(
     hass.states.async_set(MOCK_GRID, "-2000")
     hass.states.async_set(MOCK_SWITCH, "on")
     await hass.async_block_till_done()
-    await _poll_with_fresh_grid(hass, freezer, timedelta(seconds=30))
+    await _poll_with_fresh_grid(hass, freezer, POLL)
 
     mock_pump_api.set_key.assert_not_called()
 
     await _poll_with_fresh_grid(hass, freezer, timedelta(seconds=90))
 
     mock_pump_api.set_key.assert_awaited_once_with("SetCurrentSpeed", 1800)
-
-
-@pytest.mark.asyncio
-async def test_energy_is_not_counted_while_the_pump_is_stopped(
-    hass: HomeAssistant, config_entry, mock_pump_api, freezer
-):
-    """A stopped pump (RunningStatus 0) uses no energy, whatever power value it still reports."""
-    mock_pump_api.get_status.return_value = {**MOCK_STATUS, "RunningStatus": "0", "CurrentWatts": "1000"}
-    await setup_integration(hass, config_entry)
-
-    await _poll_after(hass, freezer, timedelta(hours=1))
-
-    assert float(_state(hass, "sensor", "energy_kwh")) == 0

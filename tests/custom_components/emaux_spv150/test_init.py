@@ -5,13 +5,13 @@ import pytest
 from aiohttp import ClientError
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.emaux_spv150.api import PumpError
 from custom_components.emaux_spv150.const import DOMAIN
 from custom_components.emaux_spv150.coordinator import PumpCoordinator
 
-from .conftest import MOCK_GRID, MOCK_HOST, MOCK_STATUS, MOCK_SWITCH, setup_integration
+from .conftest import MOCK_GRID, MOCK_HOST, MOCK_STATUS, MOCK_SWITCH, poll_after, setup_integration, state
 
 STATUS_URL = f"http://{MOCK_HOST}/cgi-bin/EpvCgi?name=AllRd"
 
@@ -86,9 +86,7 @@ def _error_records(caplog) -> list[logging.LogRecord]:
 
 
 async def _next_poll(hass: HomeAssistant, freezer) -> None:
-    freezer.tick(timedelta(seconds=30))
-    async_fire_time_changed(hass)
-    await hass.async_block_till_done()
+    await poll_after(hass, freezer, timedelta(seconds=30))
 
 
 @pytest.mark.asyncio
@@ -322,3 +320,17 @@ async def test_grid_sensor_changed_in_the_options_is_followed(hass: HomeAssistan
     await _save_options(hass, solar_entry, {"host": MOCK_HOST, "grid_power_entity": new_grid})
 
     mock_pump_api.set_key.assert_awaited_once_with("SetCurrentSpeed", 1800)
+
+
+@pytest.mark.asyncio
+async def test_regulation_setting_changed_in_the_options_applies_without_a_reload(
+    hass: HomeAssistant, config_entry, mock_pump_api
+):
+    """Only host, switch and grid sensor need a reload: a new setpoint keeps the running state (no new setup read)."""
+    await setup_integration(hass, config_entry)
+    reads_before = mock_pump_api.get_status.await_count
+
+    await _save_options(hass, config_entry, {"host": MOCK_HOST, "setpoint": 250})
+
+    assert mock_pump_api.get_status.await_count == reads_before
+    assert float(state(hass, "number", "setpoint")) == 250

@@ -5,15 +5,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.components.diagnostics import get_diagnostics_for_config_entry
 
-from .conftest import MOCK_HOST
+from .conftest import MOCK_HOST, setup_integration
 
 
 @pytest.fixture
 async def diagnostics(hass: HomeAssistant, hass_client, config_entry, mock_pump_api) -> dict:
     assert await async_setup_component(hass, "diagnostics", {})
-    config_entry.add_to_hass(hass)
-    await hass.config_entries.async_setup(config_entry.entry_id)
-    await hass.async_block_till_done()
+    await setup_integration(hass, config_entry)
     return await get_diagnostics_for_config_entry(hass, hass_client, config_entry)
 
 
