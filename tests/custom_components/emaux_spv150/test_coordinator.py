@@ -9,13 +9,13 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import async_fire_time_changed
+from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 
 from custom_components.emaux_spv150.api import PumpError
 from custom_components.emaux_spv150.const import DOMAIN
 from custom_components.emaux_spv150.coordinator import PumpCoordinator, SpeedChangeThrottled
 
-from .conftest import MOCK_GRID, MOCK_STATUS, MOCK_SWITCH, setup_integration
+from .conftest import MOCK_GRID, MOCK_HOST, MOCK_STATUS, MOCK_SWITCH, setup_integration
 
 
 @pytest.mark.asyncio
@@ -580,3 +580,36 @@ async def test_stale_grid_sensor_is_logged_once_until_it_reports_again(
     await _poll_after(hass, freezer, timedelta(seconds=30))
 
     assert len(_grid_logs(caplog, logging.INFO)) == 1
+
+
+async def _poll_with_fresh_grid(hass: HomeAssistant, freezer, delay: timedelta) -> None:
+    """Let time pass while the grid sensor keeps reporting an export, then run the poll that is due."""
+    freezer.tick(delay)
+    hass.states.async_set(MOCK_GRID, "-2000")
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+
+@pytest.mark.asyncio
+async def test_solar_regulation_waits_for_the_priming_after_the_switch_turns_on(
+    hass: HomeAssistant, mock_pump_api, freezer
+):
+    """After the power switch turns on, the pump primes at its own speed before the solar mode drives it."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"host": MOCK_HOST, "switch_entity": MOCK_SWITCH, "grid_power_entity": MOCK_GRID},
+        options={"control_mode": "solar", "priming_time": 120},
+        unique_id=MOCK_HOST,
+    )
+    hass.states.async_set(MOCK_SWITCH, "off")
+    await setup_integration(hass, entry)
+    hass.states.async_set(MOCK_GRID, "-2000")
+    hass.states.async_set(MOCK_SWITCH, "on")
+    await hass.async_block_till_done()
+    await _poll_with_fresh_grid(hass, freezer, timedelta(seconds=30))
+
+    mock_pump_api.set_key.assert_not_called()
+
+    await _poll_with_fresh_grid(hass, freezer, timedelta(seconds=90))
+
+    mock_pump_api.set_key.assert_awaited_once_with("SetCurrentSpeed", 1800)
