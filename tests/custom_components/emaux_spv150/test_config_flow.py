@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.data_entry_flow import FlowResultType, InvalidData
 from homeassistant.helpers.selector import EntitySelector
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -424,4 +424,26 @@ async def test_options_flow_reports_invalid_values(
         result = await hass.config_entries.options.async_configure(result["flow_id"], user_input=user_input)
 
     assert result["errors"] == errors
+    assert config_entry.options == {}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [("setpoint", 5010), ("dead_band_lower", -5010), ("dead_band_upper", 5010), ("step_up", -100), ("step_down", 510)],
+)
+async def test_options_flow_refuses_a_value_outside_the_entity_bounds(
+    hass: HomeAssistant, config_entry, mock_pump_api, key, value
+):
+    """The options flow accepts only what the matching number entity accepts (a negative step, for example)."""
+    await _setup_with_switch(hass, config_entry, "on")
+
+    with _patch_api():
+        result = await hass.config_entries.options.async_init(config_entry.entry_id)
+        with pytest.raises(InvalidData) as exc_info:
+            await hass.config_entries.options.async_configure(
+                result["flow_id"], user_input={"host": MOCK_HOST, key: value}
+            )
+
+    assert key in exc_info.value.schema_errors
     assert config_entry.options == {}

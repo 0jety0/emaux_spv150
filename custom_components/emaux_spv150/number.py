@@ -11,6 +11,7 @@ from homeassistant.const import REVOLUTIONS_PER_MINUTE, EntityCategory, UnitOfPo
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+from .const import POWER_SETTING_MAX, POWER_SETTING_MIN, STEP_DOWN_MAX, STEP_DOWN_MIN, STEP_UP_MAX, STEP_UP_MIN
 from .coordinator import PumpConfigEntry, PumpCoordinator
 from .entity import PumpBaseEntity
 
@@ -59,8 +60,8 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
         key="setpoint",
         translation_key="setpoint",
         entity_category=EntityCategory.CONFIG,
-        native_min_value=-5000,
-        native_max_value=5000,
+        native_min_value=POWER_SETTING_MIN,
+        native_max_value=POWER_SETTING_MAX,
         native_step=10,
         native_unit_of_measurement=UnitOfPower.WATT,
         mode=NumberMode.BOX,
@@ -71,8 +72,8 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
         key="dead_band_lower",
         translation_key="dead_band_lower",
         entity_category=EntityCategory.CONFIG,
-        native_min_value=-5000,
-        native_max_value=5000,
+        native_min_value=POWER_SETTING_MIN,
+        native_max_value=POWER_SETTING_MAX,
         native_step=10,
         native_unit_of_measurement=UnitOfPower.WATT,
         mode=NumberMode.BOX,
@@ -83,8 +84,8 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
         key="dead_band_upper",
         translation_key="dead_band_upper",
         entity_category=EntityCategory.CONFIG,
-        native_min_value=-5000,
-        native_max_value=5000,
+        native_min_value=POWER_SETTING_MIN,
+        native_max_value=POWER_SETTING_MAX,
         native_step=10,
         native_unit_of_measurement=UnitOfPower.WATT,
         mode=NumberMode.BOX,
@@ -95,8 +96,8 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
         key="step_up",
         translation_key="step_up",
         entity_category=EntityCategory.CONFIG,
-        native_min_value=10,
-        native_max_value=1000,
+        native_min_value=STEP_UP_MIN,
+        native_max_value=STEP_UP_MAX,
         native_step=10,
         native_unit_of_measurement=REVOLUTIONS_PER_MINUTE,
         mode=NumberMode.BOX,
@@ -107,8 +108,8 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
         key="step_down",
         translation_key="step_down",
         entity_category=EntityCategory.CONFIG,
-        native_min_value=10,
-        native_max_value=500,
+        native_min_value=STEP_DOWN_MIN,
+        native_max_value=STEP_DOWN_MAX,
         native_step=10,
         native_unit_of_measurement=REVOLUTIONS_PER_MINUTE,
         mode=NumberMode.BOX,

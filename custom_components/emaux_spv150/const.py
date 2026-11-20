@@ -30,6 +30,14 @@ DEFAULT_PRIMING_TIME = 120
 DEFAULT_SPEED_CHANGE_INTERVAL = 60
 DEFAULT_REQUEST_TIMEOUT = 5
 
+# Bounds shared by the number entities and the options flow.
+POWER_SETTING_MIN = -5000  # setpoint and dead band, W
+POWER_SETTING_MAX = 5000
+STEP_UP_MIN = 10
+STEP_UP_MAX = 1000
+STEP_DOWN_MIN = 10
+STEP_DOWN_MAX = 500
+
 COMMAND_SETTLE_DELAY = 2
 
 # The pump joins Wi-Fi about 1-2 minutes after its power switch turns on: until then

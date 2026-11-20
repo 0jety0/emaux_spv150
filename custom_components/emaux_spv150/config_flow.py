@@ -31,6 +31,12 @@ from .const import (
     DEFAULT_STEP_DOWN,
     DEFAULT_STEP_UP,
     DOMAIN,
+    POWER_SETTING_MAX,
+    POWER_SETTING_MIN,
+    STEP_DOWN_MAX,
+    STEP_DOWN_MIN,
+    STEP_UP_MAX,
+    STEP_UP_MIN,
 )
 from .coordinator import is_switch_off
 
@@ -42,6 +48,8 @@ GRID_POWER_SELECTOR = EntitySelector(
         filter=EntityWithDeviceFilterSelectorConfig(domain=Platform.SENSOR, device_class=SensorDeviceClass.POWER)
     )
 )
+
+POWER_SETTING = probatio.All(probatio.Coerce(float), probatio.Range(min=POWER_SETTING_MIN, max=POWER_SETTING_MAX))
 
 _HOSTNAME_RE = re.compile(r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))*$")
 
@@ -204,18 +212,18 @@ class EmauxSpv150OptionsFlow(config_entries.OptionsFlow):
                 # Suggested (not default) values: a default would come back when the field is cleared.
                 probatio.Optional(CONF_SWITCH_ENTITY): SWITCH_SELECTOR,
                 probatio.Optional(CONF_GRID_POWER_ENTITY): GRID_POWER_SELECTOR,
-                probatio.Optional(CONF_SETPOINT, default=opts.get(CONF_SETPOINT, DEFAULT_SETPOINT)): probatio.Coerce(
-                    float
-                ),
+                probatio.Optional(CONF_SETPOINT, default=opts.get(CONF_SETPOINT, DEFAULT_SETPOINT)): POWER_SETTING,
                 probatio.Optional(
                     CONF_DEAD_BAND_LOWER, default=opts.get(CONF_DEAD_BAND_LOWER, DEFAULT_DEAD_BAND_LOWER)
-                ): probatio.Coerce(float),
+                ): POWER_SETTING,
                 probatio.Optional(
                     CONF_DEAD_BAND_UPPER, default=opts.get(CONF_DEAD_BAND_UPPER, DEFAULT_DEAD_BAND_UPPER)
-                ): probatio.Coerce(float),
-                probatio.Optional(CONF_STEP_UP, default=opts.get(CONF_STEP_UP, DEFAULT_STEP_UP)): probatio.Coerce(int),
-                probatio.Optional(CONF_STEP_DOWN, default=opts.get(CONF_STEP_DOWN, DEFAULT_STEP_DOWN)): probatio.Coerce(
-                    int
+                ): POWER_SETTING,
+                probatio.Optional(CONF_STEP_UP, default=opts.get(CONF_STEP_UP, DEFAULT_STEP_UP)): probatio.All(
+                    probatio.Coerce(int), probatio.Range(min=STEP_UP_MIN, max=STEP_UP_MAX)
+                ),
+                probatio.Optional(CONF_STEP_DOWN, default=opts.get(CONF_STEP_DOWN, DEFAULT_STEP_DOWN)): probatio.All(
+                    probatio.Coerce(int), probatio.Range(min=STEP_DOWN_MIN, max=STEP_DOWN_MAX)
                 ),
                 probatio.Optional(
                     CONF_PRIMING_TIME, default=opts.get(CONF_PRIMING_TIME, DEFAULT_PRIMING_TIME)
