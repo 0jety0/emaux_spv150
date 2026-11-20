@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
@@ -536,3 +537,46 @@ async def test_concurrent_speed_changes_reach_the_pump_once(hass: HomeAssistant,
     assert results[0] == "1800"
     assert isinstance(results[1], SpeedChangeThrottled)
     mock_pump_api.set_key.assert_awaited_once_with("SetCurrentSpeed", 1800)
+
+
+def _grid_logs(caplog, level: int) -> list[str]:
+    return [r.getMessage() for r in caplog.records if r.levelno == level and "Grid power entity" in r.getMessage()]
+
+
+@pytest.mark.asyncio
+async def test_missing_grid_sensor_is_logged_once_until_it_appears(
+    hass: HomeAssistant, solar_entry, mock_pump_api, caplog, freezer
+):
+    """A missing grid sensor is reported once, not at every poll, then once when regulation resumes."""
+    await setup_integration(hass, solar_entry)
+    await _poll_after(hass, freezer, timedelta(seconds=30))
+    await _poll_after(hass, freezer, timedelta(seconds=30))
+
+    assert _grid_logs(caplog, logging.WARNING) == ["Grid power entity 'sensor.grid_power' not found"]
+
+    hass.states.async_set(MOCK_GRID, "50")
+    await _poll_after(hass, freezer, timedelta(seconds=30))
+    await _poll_after(hass, freezer, timedelta(seconds=30))
+
+    assert _grid_logs(caplog, logging.INFO) == [
+        "Grid power entity 'sensor.grid_power' usable again: solar regulation resumes"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_stale_grid_sensor_is_logged_once_until_it_reports_again(
+    hass: HomeAssistant, solar_entry, mock_pump_api, caplog, freezer
+):
+    """A grid sensor that stopped reporting is reported once, not at every poll, then once when it reports again."""
+    hass.states.async_set(MOCK_GRID, "50")
+    await setup_integration(hass, solar_entry)
+    await _poll_after(hass, freezer, timedelta(seconds=90))
+    await _poll_after(hass, freezer, timedelta(seconds=30))
+
+    assert len(_grid_logs(caplog, logging.WARNING)) == 1
+
+    hass.states.async_set(MOCK_GRID, "50")
+    await _poll_after(hass, freezer, timedelta(seconds=30))
+    await _poll_after(hass, freezer, timedelta(seconds=30))
+
+    assert len(_grid_logs(caplog, logging.INFO)) == 1

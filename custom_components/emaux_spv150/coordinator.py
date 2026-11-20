@@ -153,6 +153,9 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         self._priming_done: bool = True
         self._prev_switch_on: bool = True
 
+        # True once a missing or stale grid sensor has been logged, until it is usable again
+        self._grid_unusable_logged: bool = False
+
         # Energy tracking
         self._energy_kwh: float = 0.0
         self._last_energy_update: datetime | None = None
@@ -372,6 +375,12 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
             rpm_max_solar=self.rpm_max_solar,
         )
 
+    def _log_grid_unusable(self, message: str, *args: object) -> None:
+        """Warn once when the grid sensor blocks the regulation, not at every poll."""
+        if not self._grid_unusable_logged:
+            _LOGGER.warning(message, *args)
+            self._grid_unusable_logged = True
+
     async def _apply_solar_regulation(self, current_speed: int) -> None:
         """Read the grid-power entity and apply one P-controller step if needed."""
         if not self.grid_power_entity:
@@ -379,7 +388,7 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
 
         grid_state = self.hass.states.get(self.grid_power_entity)
         if grid_state is None:
-            _LOGGER.warning("Grid power entity '%s' not found", self.grid_power_entity)
+            self._log_grid_unusable("Grid power entity '%s' not found", self.grid_power_entity)
             return
 
         grid_power = grid_power_watts(grid_state)
@@ -390,12 +399,16 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         if grid_state.last_reported is not None:
             stale_seconds = (dt_util.utcnow() - grid_state.last_reported).total_seconds()
             if stale_seconds > GRID_POWER_STALENESS_SECONDS:
-                _LOGGER.warning(
+                self._log_grid_unusable(
                     "Grid power entity '%s' not reported for %.0fs — skipping solar regulation",
                     self.grid_power_entity,
                     stale_seconds,
                 )
                 return
+
+        if self._grid_unusable_logged:
+            _LOGGER.info("Grid power entity '%s' usable again: solar regulation resumes", self.grid_power_entity)
+            self._grid_unusable_logged = False
 
         new_speed = SolarRegulator(self._solar_config()).compute(current_speed, grid_power)
         if new_speed is not None:
