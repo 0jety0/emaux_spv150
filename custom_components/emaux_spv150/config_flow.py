@@ -38,7 +38,7 @@ from .const import (
     STEP_UP_MAX,
     STEP_UP_MIN,
 )
-from .coordinator import is_switch_off
+from .coordinator import connection_settings, is_switch_off
 
 SWITCH_SELECTOR = EntitySelector(
     EntitySelectorConfig(filter=EntityWithDeviceFilterSelectorConfig(domain=Platform.SWITCH))
@@ -159,15 +159,13 @@ class EmauxSpv150ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         options={k: v for k, v in entry.options.items() if k not in connection},
                     )
 
-        # Show the values actually in use (options win over data, as in the coordinator).
-        settings = {**entry.data, **entry.options}
-        current_host = settings.get(CONF_HOST) or DEFAULT_HOST
-
+        # Show the values actually in use.
+        settings = connection_settings(entry)
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=self.add_suggested_values_to_schema(
-                _connection_schema(current_host),
-                _suggested_entities(settings.get(CONF_SWITCH_ENTITY), settings.get(CONF_GRID_POWER_ENTITY)),
+                _connection_schema(settings.host),
+                _suggested_entities(settings.switch_entity_id, settings.grid_power_entity),
             ),
             errors=errors,
         )
@@ -187,7 +185,7 @@ class EmauxSpv150OptionsFlow(config_entries.OptionsFlow):
         """Handle options update."""
         errors: dict[str, str] = {}
         opts = self.config_entry.options
-        data = self.config_entry.data
+        settings = connection_settings(self.config_entry)
 
         if user_input is not None:
             # A cleared optional entity field is absent from user_input: store it as "none".
@@ -205,7 +203,7 @@ class EmauxSpv150OptionsFlow(config_entries.OptionsFlow):
 
             if not errors:
                 # Only a new host needs checking: a booting or unplugged pump must not block saving a setting.
-                host_changed = user_input[CONF_HOST] != (opts.get(CONF_HOST) or data[CONF_HOST])
+                host_changed = user_input[CONF_HOST] != settings.host
                 if host_changed and await _pump_unreachable(
                     self.hass, user_input[CONF_HOST], user_input.get(CONF_SWITCH_ENTITY)
                 ):
@@ -216,7 +214,7 @@ class EmauxSpv150OptionsFlow(config_entries.OptionsFlow):
 
         schema = probatio.Schema(
             {
-                probatio.Required(CONF_HOST, default=opts.get(CONF_HOST, data.get(CONF_HOST, DEFAULT_HOST))): str,
+                probatio.Required(CONF_HOST, default=settings.host): str,
                 # Suggested (not default) values: a default would come back when the field is cleared.
                 probatio.Optional(CONF_SWITCH_ENTITY): SWITCH_SELECTOR,
                 probatio.Optional(CONF_GRID_POWER_ENTITY): GRID_POWER_SELECTOR,
@@ -242,10 +240,7 @@ class EmauxSpv150OptionsFlow(config_entries.OptionsFlow):
                 ): probatio.All(probatio.Coerce(int), probatio.Range(min=0, max=300)),
             }
         )
-        current = _suggested_entities(
-            opts.get(CONF_SWITCH_ENTITY, data.get(CONF_SWITCH_ENTITY)),
-            opts.get(CONF_GRID_POWER_ENTITY, data.get(CONF_GRID_POWER_ENTITY)),
-        )
+        current = _suggested_entities(settings.switch_entity_id, settings.grid_power_entity)
         return self.async_show_form(
             step_id="init",
             data_schema=self.add_suggested_values_to_schema(schema, current),

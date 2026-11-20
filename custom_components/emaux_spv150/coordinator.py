@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, override
 
@@ -50,6 +51,31 @@ from .solar import SolarControllerConfig, SolarRegulator
 _LOGGER = logging.getLogger(__name__)
 
 type PumpConfigEntry = ConfigEntry["PumpCoordinator"]
+
+
+@dataclass(frozen=True)
+class ConnectionSettings:
+    """Settings that need a reload when they change."""
+
+    host: str
+    switch_entity_id: str | None
+    grid_power_entity: str
+
+
+def connection_settings(entry: ConfigEntry) -> ConnectionSettings:
+    """Return the connection settings in use: options win over data.
+
+    The options flow stores all three (an empty entity as ""), so an entity present in the options
+    wins even when empty; the host in the options wins only when set.
+    """
+    opts, data = entry.options, entry.data
+    switch = opts[CONF_SWITCH_ENTITY] if CONF_SWITCH_ENTITY in opts else data.get(CONF_SWITCH_ENTITY)
+    grid = opts[CONF_GRID_POWER_ENTITY] if CONF_GRID_POWER_ENTITY in opts else data.get(CONF_GRID_POWER_ENTITY)
+    return ConnectionSettings(
+        host=opts.get(CONF_HOST) or data[CONF_HOST],
+        switch_entity_id=switch or None,
+        grid_power_entity=grid or "",
+    )
 
 
 def is_switch_off(hass: HomeAssistant, entity_id: str | None) -> bool:
@@ -114,26 +140,21 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
 
     def __init__(self, hass: HomeAssistant, entry: PumpConfigEntry) -> None:
         opts = entry.options
-        data = entry.data
-
-        host = opts.get(CONF_HOST) or data[CONF_HOST]
-        switch_entity_id = opts[CONF_SWITCH_ENTITY] if CONF_SWITCH_ENTITY in opts else data.get(CONF_SWITCH_ENTITY)
+        settings = connection_settings(entry)
 
         # Connection-relevant settings: a change in any of these requires a full
         # reload (handled by the update listener in __init__.py).
-        self.host: str = host
+        self.host: str = settings.host
         self.poll_interval: int = int(opts.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL))
         self.request_timeout: int = int(opts.get(CONF_REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT))
-        self.api_pump = PumpAPI(host, async_get_clientsession(hass), self.request_timeout)
-        self.switch_entity_id: str | None = switch_entity_id or None
+        self.api_pump = PumpAPI(settings.host, async_get_clientsession(hass), self.request_timeout)
+        self.switch_entity_id: str | None = settings.switch_entity_id
 
         # Control mode: "off" | "manual" | "solar"
         self.control_mode: str = opts.get("control_mode", "manual")
 
         # Solar parameters
-        self.grid_power_entity: str = (
-            opts[CONF_GRID_POWER_ENTITY] if CONF_GRID_POWER_ENTITY in opts else data.get(CONF_GRID_POWER_ENTITY, "")
-        )
+        self.grid_power_entity: str = settings.grid_power_entity
         self.setpoint: float = float(opts.get(CONF_SETPOINT, DEFAULT_SETPOINT))
         self.dead_band_lower: float = float(opts.get(CONF_DEAD_BAND_LOWER, DEFAULT_DEAD_BAND_LOWER))
         self.dead_band_upper: float = float(opts.get(CONF_DEAD_BAND_UPPER, DEFAULT_DEAD_BAND_UPPER))
@@ -198,13 +219,8 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         These are the only settings that require a full reload; everything else
         is applied live via apply_options().
         """
-        opts, data = entry.options, entry.data
-        new_host = opts.get(CONF_HOST) or data[CONF_HOST]
-        new_switch = (opts[CONF_SWITCH_ENTITY] if CONF_SWITCH_ENTITY in opts else data.get(CONF_SWITCH_ENTITY)) or None
-        new_grid = (
-            opts[CONF_GRID_POWER_ENTITY] if CONF_GRID_POWER_ENTITY in opts else data.get(CONF_GRID_POWER_ENTITY, "")
-        ) or ""
-        return new_host != self.host or new_switch != self.switch_entity_id or new_grid != self.grid_power_entity
+        live = ConnectionSettings(self.host, self.switch_entity_id, self.grid_power_entity)
+        return connection_settings(entry) != live
 
     def apply_options(self, entry: PumpConfigEntry) -> None:
         """Re-read regulation parameters from the entry options into live state.
