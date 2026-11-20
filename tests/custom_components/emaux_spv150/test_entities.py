@@ -189,15 +189,16 @@ async def _setup(hass: HomeAssistant, entry) -> None:
 
 
 @pytest.mark.asyncio
-async def test_turning_the_pump_on_sends_run(hass: HomeAssistant, config_entry, mock_pump_api):
-    """The run/stop switch starts the pump with RunStop = 1."""
+@pytest.mark.parametrize(("service", "value"), [("turn_on", 1), ("turn_off", 2)])
+async def test_run_stop_switch_sends_run_stop(hass: HomeAssistant, config_entry, mock_pump_api, service, value):
+    """The run/stop switch starts the pump with RunStop = 1 and stops it with RunStop = 2."""
     await _setup(hass, config_entry)
 
     await hass.services.async_call(
-        "switch", "turn_on", {"entity_id": _entity_id(hass, "switch", "running_status")}, blocking=True
+        "switch", service, {"entity_id": _entity_id(hass, "switch", "running_status")}, blocking=True
     )
 
-    mock_pump_api.set_key.assert_awaited_once_with("RunStop", 1)
+    mock_pump_api.set_key.assert_awaited_once_with("RunStop", value)
 
 
 @pytest.mark.asyncio
@@ -258,3 +259,22 @@ async def test_switch_attribute_change_does_not_poll_the_pump(
     await hass.async_block_till_done()
 
     assert mock_pump_api.get_status.await_count == reads_before
+
+
+@pytest.mark.asyncio
+async def test_new_polling_interval_applies_without_a_reload(hass: HomeAssistant, config_entry, mock_pump_api, freezer):
+    """A polling interval changed from its entity spaces the polls from the next one on (30 s, then 10 s)."""
+    await _setup(hass, config_entry)
+    await hass.services.async_call(
+        "number", "set_value", {"entity_id": _entity_id(hass, "number", "poll_interval"), "value": 10}, blocking=True
+    )
+    reads_before = mock_pump_api.get_status.await_count
+
+    freezer.tick(timedelta(seconds=30))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    freezer.tick(timedelta(seconds=10))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+    assert mock_pump_api.get_status.await_count == reads_before + 2

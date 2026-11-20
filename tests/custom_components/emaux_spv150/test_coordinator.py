@@ -603,3 +603,16 @@ async def test_solar_regulation_waits_for_the_priming_after_the_switch_turns_on(
     await _poll_with_fresh_grid(hass, freezer, timedelta(seconds=90))
 
     mock_pump_api.set_key.assert_awaited_once_with("SetCurrentSpeed", 1800)
+
+
+@pytest.mark.asyncio
+async def test_energy_is_not_counted_while_the_pump_is_stopped(
+    hass: HomeAssistant, config_entry, mock_pump_api, freezer
+):
+    """A stopped pump (RunningStatus 0) uses no energy, whatever power value it still reports."""
+    mock_pump_api.get_status.return_value = {**MOCK_STATUS, "RunningStatus": "0", "CurrentWatts": "1000"}
+    await setup_integration(hass, config_entry)
+
+    await _poll_after(hass, freezer, timedelta(hours=1))
+
+    assert float(_state(hass, "sensor", "energy_kwh")) == 0
