@@ -214,6 +214,24 @@ async def test_local_setting_is_shown_and_saved(hass: HomeAssistant, config_entr
 
 
 @pytest.mark.asyncio
+async def test_saved_energy_is_restored_at_startup(hass: HomeAssistant, config_entry, mock_pump_api):
+    """The energy counter goes on from the value saved before the restart instead of starting from zero."""
+    mock_restore_cache_with_extra_data(
+        hass,
+        [
+            (
+                State("sensor.emaux_spv150_energy", "5.2345"),
+                {"native_value": 5.2345, "native_unit_of_measurement": "kWh"},
+            )
+        ],
+    )
+
+    await _setup(hass, config_entry)
+
+    assert float(hass.states.get(_entity_id(hass, "sensor", "energy_kwh")).state) == 5.2345
+
+
+@pytest.mark.asyncio
 async def test_unreadable_saved_energy_restarts_from_zero(hass: HomeAssistant, config_entry, mock_pump_api, caplog):
     """A corrupt saved energy value is reported and the counter starts from zero instead of failing."""
     mock_restore_cache_with_extra_data(

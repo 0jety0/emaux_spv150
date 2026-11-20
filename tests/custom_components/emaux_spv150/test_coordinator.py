@@ -207,16 +207,6 @@ async def test_energy_not_counted_across_failed_polls(hass: HomeAssistant, confi
 
 
 @pytest.mark.asyncio
-async def test_energy_restore(hass: HomeAssistant, config_entry):
-    """restore_energy() should seed the cumulated value."""
-    config_entry.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry)
-
-    coordinator.restore_energy(5.2345)
-    assert coordinator.energy_kwh == 5.2345
-
-
-@pytest.mark.asyncio
 async def test_uptime_tracking_and_reset(hass: HomeAssistant, config_entry, mock_pump_api):
     """Uptime should start when running and reset to None when stopped."""
     config_entry.add_to_hass(hass)
