@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from enum import StrEnum
 
 from homeassistant.const import Platform
 
@@ -7,6 +8,7 @@ DEFAULT_HOST = "192.168.1.1"
 PLATFORMS = [Platform.SENSOR, Platform.NUMBER, Platform.SWITCH, Platform.SELECT]
 
 CONF_SWITCH_ENTITY = "switch_entity"
+CONF_CONTROL_MODE = "control_mode"
 CONF_POLL_INTERVAL = "poll_interval"
 CONF_GRID_POWER_ENTITY = "grid_power_entity"
 CONF_SETPOINT = "setpoint"
@@ -20,9 +22,26 @@ CONF_PRIMING_TIME = "priming_time"
 CONF_SPEED_CHANGE_INTERVAL = "speed_change_interval"
 CONF_REQUEST_TIMEOUT = "request_timeout"
 
+
+class ControlMode(StrEnum):
+    """Who drives the pump speed; the value is what the entry options store."""
+
+    OFF = "off"
+    MANUAL = "manual"
+    SOLAR = "solar"
+
+
+class PumpCommand(StrEnum):
+    """Command keys of the pump's CGI interface."""
+
+    SET_CURRENT_SPEED = "SetCurrentSpeed"
+    SET_SPEED_SELECTED = "SetSpeedSelected"
+    RUN_STOP = "RunStop"
+
+
 # Default of each option, used while the option is not in the entry options.
 OPTION_DEFAULTS: Mapping[str, str | float] = {
-    "control_mode": "manual",
+    CONF_CONTROL_MODE: ControlMode.MANUAL,
     CONF_POLL_INTERVAL: 30,
     CONF_SETPOINT: 0.0,
     CONF_DEAD_BAND_LOWER: 0.0,

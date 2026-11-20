@@ -17,6 +17,7 @@ from homeassistant.util.unit_conversion import PowerConverter
 from .api import PumpAPI, PumpError
 from .const import (
     COMMAND_SETTLE_DELAY,
+    CONF_CONTROL_MODE,
     CONF_DEAD_BAND_LOWER,
     CONF_DEAD_BAND_UPPER,
     CONF_GRID_POWER_ENTITY,
@@ -34,6 +35,8 @@ from .const import (
     GRID_POWER_STALENESS_SECONDS,
     OPTION_DEFAULTS,
     PUMP_BOOT_TIME,
+    ControlMode,
+    PumpCommand,
 )
 from .models import PumpStatus, to_float
 from .solar import SolarControllerConfig, SolarRegulator
@@ -129,7 +132,7 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
     config_entry: PumpConfigEntry
 
     # Settings read from the entry options (or their default) by apply_options()
-    control_mode: str  # "off" | "manual" | "solar"
+    control_mode: ControlMode
     poll_interval: int
     request_timeout: int
     setpoint: float
@@ -203,7 +206,7 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         options-flow edit applies without a reload (and a number-entity write is simply re-applied).
         """
         opts = {**OPTION_DEFAULTS, **entry.options}
-        self.control_mode = str(opts["control_mode"])
+        self.control_mode = ControlMode(opts[CONF_CONTROL_MODE])
         self.setpoint = float(opts[CONF_SETPOINT])
         self.dead_band_lower = float(opts[CONF_DEAD_BAND_LOWER])
         self.dead_band_upper = float(opts[CONF_DEAD_BAND_UPPER])
@@ -253,9 +256,9 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
     # Pump command
     # -------------------------------------------------------------------------
 
-    async def async_set_pump_key(self, key: str, value: int) -> str:
+    async def async_set_pump_key(self, key: PumpCommand, value: int) -> str:
         """Send a command to the pump; a speed change within the minimum interval raises SpeedChangeThrottled."""
-        if key != "SetCurrentSpeed":
+        if key != PumpCommand.SET_CURRENT_SPEED:
             return await self._send_pump_key(key, value)
         # The check and the arming must not be split by the request: a manual change sent while the
         # regulator's change is in flight would pass the check too.
@@ -277,7 +280,7 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
                 translation_placeholders={"interval": str(self.speed_change_interval)},
             )
 
-    async def _send_pump_key(self, key: str, value: int) -> str:
+    async def _send_pump_key(self, key: PumpCommand, value: int) -> str:
         try:
             return await self.api_pump.set_key(key, value)
         except PumpError as err:
@@ -385,7 +388,7 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
                 new_speed,
             )
             try:
-                await self.async_set_pump_key("SetCurrentSpeed", new_speed)
+                await self.async_set_pump_key(PumpCommand.SET_CURRENT_SPEED, new_speed)
             except SpeedChangeThrottled:
                 _LOGGER.debug("Solar regulation: speed change to %d rpm throttled", new_speed)
             except HomeAssistantError as err:
@@ -460,7 +463,7 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         # After priming window elapses, unlock solar regulation
         if (
             status.running
-            and self.control_mode == "solar"
+            and self.control_mode == ControlMode.SOLAR
             and not self._priming_done
             and self._pump_started_at is not None
         ):
@@ -469,7 +472,12 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
                 _LOGGER.debug("Priming complete after %.0fs — handing off to solar regulation", elapsed)
                 self._priming_done = True
 
-        if status.running and self.control_mode == "solar" and self._priming_done and status.current_speed is not None:
+        if (
+            status.running
+            and self.control_mode == ControlMode.SOLAR
+            and self._priming_done
+            and status.current_speed is not None
+        ):
             await self._apply_solar_regulation(int(status.current_speed))
 
         return status

@@ -4,6 +4,7 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+from .const import PumpCommand
 from .coordinator import PumpConfigEntry, PumpCoordinator
 from .entity import PumpBaseEntity
 
@@ -25,7 +26,6 @@ class RunStopSwitchEntity(PumpBaseEntity, SwitchEntity):
 
     def __init__(self, coordinator: PumpCoordinator) -> None:
         super().__init__(coordinator)
-        self._set_key = "RunStop"
         self._attr_unique_id = "spv150_running_status"
 
     @property
@@ -37,11 +37,11 @@ class RunStopSwitchEntity(PumpBaseEntity, SwitchEntity):
     @override
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Start the pump."""
-        await self.coordinator.async_set_pump_key(self._set_key, 1)
+        await self.coordinator.async_set_pump_key(PumpCommand.RUN_STOP, 1)
         await self.coordinator.async_request_refresh()
 
     @override
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Stop the pump."""
-        await self.coordinator.async_set_pump_key(self._set_key, 2)
+        await self.coordinator.async_set_pump_key(PumpCommand.RUN_STOP, 2)
         await self.coordinator.async_request_refresh()

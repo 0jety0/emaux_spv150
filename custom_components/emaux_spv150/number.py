@@ -27,6 +27,7 @@ from .const import (
     STEP_DOWN_MIN,
     STEP_UP_MAX,
     STEP_UP_MIN,
+    PumpCommand,
 )
 from .coordinator import PumpConfigEntry, PumpCoordinator
 from .entity import PumpBaseEntity
@@ -39,7 +40,7 @@ class PumpNumberDescription(NumberEntityDescription):
     """A value read from the pump and written to it with a pump command."""
 
     value_fn: Callable[[PumpCoordinator], float | None]
-    command: str
+    command: PumpCommand
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -59,7 +60,7 @@ PUMP_NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
         native_step=10,
         native_unit_of_measurement=REVOLUTIONS_PER_MINUTE,
         mode=NumberMode.SLIDER,
-        command="SetCurrentSpeed",
+        command=PumpCommand.SET_CURRENT_SPEED,
         value_fn=lambda c: c.data.current_speed,
     ),
     PumpNumberDescription(
@@ -69,7 +70,7 @@ PUMP_NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
         native_max_value=3,
         native_step=1,
         mode=NumberMode.SLIDER,
-        command="SetSpeedSelected",
+        command=PumpCommand.SET_SPEED_SELECTED,
         value_fn=lambda c: float(c.data.speed_selected) if c.data.speed_selected is not None else None,
     ),
 )
