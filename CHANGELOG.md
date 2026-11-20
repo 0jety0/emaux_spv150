@@ -8,9 +8,11 @@ and versions follow [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - **Grid meter in kW**: a grid-power sensor reporting in kW (or MW) is converted to watts. An export of 2 kW was
-  read as 2 W, so the solar mode barely moved the pump.
+  read as 2 W, so the solar mode barely moved the pump. A sensor with a unit that is not a power unit is still read
+  as watts, with one warning in the log.
 - **Options without bounds**: the options form now refuses the setpoint, dead band and steps outside the limits of
-  their number entities (a negative step, for example, inverted the regulation).
+  their number entities (a negative step, for example, inverted the regulation). A value saved earlier outside these
+  limits is brought back within them the next time the options are saved.
 - **Uptime after an outage**: once a pump that stopped answering is back, the uptime counts from its recovery
   instead of including the hours it could not be read.
 - **Saving options while the pump is off**: the options are saved without contacting the pump unless the host
@@ -20,7 +22,8 @@ and versions follow [Semantic Versioning](https://semver.org/).
 - **IPv6 address**: a pump configured with an IPv6 address can be reached (it was always "cannot connect").
 - **Log flood from the grid sensor**: a missing or stale grid-power sensor is logged once, then once when the solar
   mode resumes, instead of a warning at every poll.
-- **Same pump twice**: reconfiguring an entry to the address of another configured pump is refused.
+- **Same pump twice**: reconfiguring an entry, or changing its address in the options, to the address of another
+  configured pump is refused.
 
 ### Changed
 
