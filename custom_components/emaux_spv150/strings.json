@@ -70,7 +70,8 @@
     "error": {
       "cannot_connect": "Cannot connect to the pump. Check the IP address and network.",
       "invalid_host": "Invalid IP address or hostname.",
-      "dead_band_range_invalid": "Dead band upper bound must be greater than or equal to lower bound."
+      "dead_band_range_invalid": "Dead band upper bound must be greater than or equal to lower bound.",
+      "already_configured": "Another entry already uses this pump address."
     }
   },
   "entity": {

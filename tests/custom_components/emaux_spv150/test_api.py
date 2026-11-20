@@ -141,3 +141,25 @@ async def test_errors_never_carry_the_pump_address(error):
         await api.get_status()
 
     assert "192.168.1.50" not in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("host", "base_url"),
+    [
+        ("192.168.1.50", "http://192.168.1.50/cgi-bin/"),
+        ("pump.local", "http://pump.local/cgi-bin/"),
+        ("2001:db8::50", "http://[2001:db8::50]/cgi-bin/"),
+    ],
+)
+async def test_requests_are_sent_to_the_host(host, base_url):
+    """An IPv6 address is written in brackets in the URL; an IPv4 address or a hostname as is."""
+    session = _session('{"CurrentSpeed": "1500", "SetCurrentSpeed": 1800}')
+    api = PumpAPI(host, session)
+
+    await api.get_status()
+    await api.set_key("SetCurrentSpeed", 1800)
+
+    status_call, command_call = session.get.call_args_list
+    assert status_call.args[0].startswith(base_url)
+    assert command_call.args[0].startswith(base_url)

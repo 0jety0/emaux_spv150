@@ -1,3 +1,6 @@
+from collections.abc import Mapping
+from enum import StrEnum
+
 from homeassistant.const import Platform
 
 DOMAIN = "emaux_spv150"
@@ -5,6 +8,7 @@ DEFAULT_HOST = "192.168.1.1"
 PLATFORMS = [Platform.SENSOR, Platform.NUMBER, Platform.SWITCH, Platform.SELECT]
 
 CONF_SWITCH_ENTITY = "switch_entity"
+CONF_CONTROL_MODE = "control_mode"
 CONF_POLL_INTERVAL = "poll_interval"
 CONF_GRID_POWER_ENTITY = "grid_power_entity"
 CONF_SETPOINT = "setpoint"
@@ -18,17 +22,50 @@ CONF_PRIMING_TIME = "priming_time"
 CONF_SPEED_CHANGE_INTERVAL = "speed_change_interval"
 CONF_REQUEST_TIMEOUT = "request_timeout"
 
-DEFAULT_POLL_INTERVAL = 30
-DEFAULT_SETPOINT = 0.0
-DEFAULT_DEAD_BAND_LOWER = 0.0
-DEFAULT_DEAD_BAND_UPPER = 100.0
-DEFAULT_STEP_UP = 300
-DEFAULT_STEP_DOWN = 30
-DEFAULT_RPM_MIN_SOLAR = 1400
-DEFAULT_RPM_MAX_SOLAR = 3000
-DEFAULT_PRIMING_TIME = 120
-DEFAULT_SPEED_CHANGE_INTERVAL = 60
+
+class ControlMode(StrEnum):
+    """Who drives the pump speed; the value is what the entry options store."""
+
+    OFF = "off"
+    MANUAL = "manual"
+    SOLAR = "solar"
+
+
+class PumpCommand(StrEnum):
+    """Command keys of the pump's CGI interface."""
+
+    SET_CURRENT_SPEED = "SetCurrentSpeed"
+    SET_SPEED_SELECTED = "SetSpeedSelected"
+    RUN_STOP = "RunStop"
+
+
+# The pump's embedded CGI server is slow and sometimes flaky over the LAN: a generous
+# default, well under the default polling interval. Both are user-adjustable.
 DEFAULT_REQUEST_TIMEOUT = 5
+
+# Default of each option, used while the option is not in the entry options.
+OPTION_DEFAULTS: Mapping[str, str | float] = {
+    CONF_CONTROL_MODE: ControlMode.MANUAL,
+    CONF_POLL_INTERVAL: 30,
+    CONF_SETPOINT: 0.0,
+    CONF_DEAD_BAND_LOWER: 0.0,
+    CONF_DEAD_BAND_UPPER: 100.0,
+    CONF_STEP_UP: 300,
+    CONF_STEP_DOWN: 30,
+    CONF_RPM_MIN_SOLAR: 1400,
+    CONF_RPM_MAX_SOLAR: 3000,
+    CONF_PRIMING_TIME: 120,
+    CONF_SPEED_CHANGE_INTERVAL: 60,
+    CONF_REQUEST_TIMEOUT: DEFAULT_REQUEST_TIMEOUT,
+}
+
+# Bounds shared by the number entities and the options flow.
+POWER_SETTING_MIN = -5000  # setpoint and dead band, W
+POWER_SETTING_MAX = 5000
+STEP_UP_MIN = 10
+STEP_UP_MAX = 1000
+STEP_DOWN_MIN = 10
+STEP_DOWN_MAX = 500
 
 COMMAND_SETTLE_DELAY = 2
 

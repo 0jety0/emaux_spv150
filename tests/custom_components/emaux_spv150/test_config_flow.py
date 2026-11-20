@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.data_entry_flow import FlowResultType, InvalidData
 from homeassistant.helpers.selector import EntitySelector
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -191,7 +191,7 @@ async def test_options_flow_skips_pump_when_switch_off(hass: HomeAssistant, conf
         result = await hass.config_entries.options.async_init(config_entry_with_switch.entry_id)
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
-            user_input={"host": MOCK_HOST, "switch_entity": MOCK_SWITCH, "setpoint": 80},
+            user_input={"host": "192.168.1.77", "switch_entity": MOCK_SWITCH, "setpoint": 80},
         )
 
     assert result["type"] == FlowResultType.CREATE_ENTRY
@@ -210,7 +210,7 @@ async def test_options_flow_still_checks_the_pump_when_switch_state_is_unknown(
         result = await hass.config_entries.options.async_init(config_entry_with_switch.entry_id)
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
-            user_input={"host": MOCK_HOST, "switch_entity": MOCK_SWITCH, "setpoint": 80},
+            user_input={"host": "192.168.1.77", "switch_entity": MOCK_SWITCH, "setpoint": 80},
         )
 
     assert result["errors"] == {"base": "cannot_connect"}
@@ -218,14 +218,14 @@ async def test_options_flow_still_checks_the_pump_when_switch_state_is_unknown(
 
 @pytest.mark.asyncio
 async def test_options_flow_cannot_connect_when_switch_on(hass: HomeAssistant, config_entry_with_switch, mock_pump_api):
-    """With the switch ON, an unreachable pump still blocks the options with cannot_connect."""
+    """With the switch ON, a new host whose pump does not answer blocks the options with cannot_connect."""
     await _setup_with_switch(hass, config_entry_with_switch, "on")
 
     with _patch_api(side_effect=UNREACHABLE):
         result = await hass.config_entries.options.async_init(config_entry_with_switch.entry_id)
         result = await hass.config_entries.options.async_configure(
             result["flow_id"],
-            user_input={"host": MOCK_HOST, "switch_entity": MOCK_SWITCH},
+            user_input={"host": "192.168.1.77", "switch_entity": MOCK_SWITCH},
         )
 
     assert result["type"] == FlowResultType.FORM
@@ -424,4 +424,94 @@ async def test_options_flow_reports_invalid_values(
         result = await hass.config_entries.options.async_configure(result["flow_id"], user_input=user_input)
 
     assert result["errors"] == errors
+    assert config_entry.options == {}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [("setpoint", 5010), ("dead_band_lower", -5010), ("dead_band_upper", 5010), ("step_up", -100), ("step_down", 510)],
+)
+async def test_options_flow_refuses_a_value_outside_the_entity_bounds(
+    hass: HomeAssistant, config_entry, mock_pump_api, key, value
+):
+    """The options flow accepts only what the matching number entity accepts (a negative step, for example)."""
+    await _setup_with_switch(hass, config_entry, "on")
+
+    with _patch_api():
+        result = await hass.config_entries.options.async_init(config_entry.entry_id)
+        with pytest.raises(InvalidData) as exc_info:
+            await hass.config_entries.options.async_configure(
+                result["flow_id"], user_input={"host": MOCK_HOST, key: value}
+            )
+
+    assert key in exc_info.value.schema_errors
+    assert config_entry.options == {}
+
+
+@pytest.mark.asyncio
+async def test_options_flow_saves_settings_without_contacting_the_pump_when_the_host_is_unchanged(
+    hass: HomeAssistant, config_entry, mock_pump_api
+):
+    """A pump booting or unplugged must not block saving a regulation setting: only a new host is checked."""
+    await _setup_with_switch(hass, config_entry, "on")
+
+    with _patch_api(side_effect=UNREACHABLE):
+        result = await hass.config_entries.options.async_init(config_entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], user_input={"host": MOCK_HOST, "setpoint": 80}
+        )
+
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert config_entry.options["setpoint"] == 80
+
+
+@pytest.mark.asyncio
+async def test_reconfigure_to_the_host_of_another_pump_is_aborted(hass: HomeAssistant, config_entry, mock_pump_api):
+    """Two entries must not drive the same pump: reconfiguring to a host already configured is refused."""
+    other_host = "192.168.1.60"
+    other = MockConfigEntry(domain=DOMAIN, data={"host": other_host, "switch_entity": ""}, unique_id=other_host)
+    other.add_to_hass(hass)
+    await _setup_with_switch(hass, config_entry, "on")
+
+    with _patch_api():
+        result = await config_entry.start_reconfigure_flow(hass)
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input={"host": other_host})
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert (config_entry.data["host"], config_entry.unique_id) == (MOCK_HOST, MOCK_HOST)
+    assert (other.data["host"], other.unique_id) == (other_host, other_host)
+
+
+@pytest.mark.asyncio
+async def test_options_flow_brings_an_old_out_of_range_value_back_within_bounds(hass: HomeAssistant, mock_pump_api):
+    """A value saved by an older version outside today's bounds must not block saving another option."""
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={"host": MOCK_HOST, "switch_entity": ""}, options={"step_up": 5}, unique_id=MOCK_HOST
+    )
+    await _setup_with_switch(hass, entry, "on")
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"host": MOCK_HOST, "setpoint": 80}
+    )
+
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert entry.options["step_up"] == 10
+
+
+@pytest.mark.asyncio
+async def test_options_flow_refuses_the_host_of_another_pump(hass: HomeAssistant, config_entry, mock_pump_api):
+    """Two entries must not drive the same pump: the options cannot take the host of another entry either."""
+    other_host = "192.168.1.60"
+    other = MockConfigEntry(domain=DOMAIN, data={"host": other_host, "switch_entity": ""}, unique_id=other_host)
+    other.add_to_hass(hass)
+    await _setup_with_switch(hass, config_entry, "on")
+
+    with _patch_api():
+        result = await hass.config_entries.options.async_init(config_entry.entry_id)
+        result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"host": other_host})
+
+    assert result["errors"] == {"base": "already_configured"}
     assert config_entry.options == {}

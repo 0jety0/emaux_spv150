@@ -5,8 +5,32 @@ and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.3.3] — 2026-11-20
+
+### Fixed
+
+- **Grid meter in kW**: a grid-power sensor reporting in kW (or MW) is converted to watts. An export of 2 kW was
+  read as 2 W, so the solar mode barely moved the pump. A sensor with a unit that is not a power unit is still read
+  as watts, with one warning in the log.
+- **Options without bounds**: the options form now refuses the setpoint, dead band and steps outside the limits of
+  their number entities (a negative step, for example, inverted the regulation). A value saved earlier outside these
+  limits is brought back within them the next time the options are saved.
+- **Uptime after an outage**: once a pump that stopped answering is back, the uptime counts from its recovery
+  instead of including the hours it could not be read.
+- **Saving options while the pump is off**: the options are saved without contacting the pump unless the host
+  changes, so a setpoint can be changed while the pump boots or is unplugged.
+- **Two speed changes at once**: a manual speed change sent while the solar mode was changing the speed reached
+  the pump too, despite the minimum interval between speed changes. Only the first one is sent now.
+- **IPv6 address**: a pump configured with an IPv6 address can be reached (it was always "cannot connect").
+- **Log flood from the grid sensor**: a missing or stale grid-power sensor is logged once, then once when the solar
+  mode resumes, instead of a warning at every poll.
+- **Same pump twice**: reconfiguring an entry, or changing its address in the options, to the address of another
+  configured pump is refused.
+
 ### Changed
 
+- Internal clean-up, no change for users: connection settings and option defaults read in one place, one method to
+  change a setting, enums for the control mode and pump commands, and tests that go through Home Assistant.
 - README (English and French) rewritten: how the solar mode works, with a chart computed from the regulator code,
   My Home Assistant buttons, automation examples.
 - Issue forms (bug report with diagnostics, feature request) and Dependabot for GitHub Actions and the uv lock file.

@@ -1,3 +1,4 @@
+import ipaddress
 import json
 import logging
 from typing import Any
@@ -5,12 +6,18 @@ from urllib.parse import quote
 
 from aiohttp import ClientError, ClientResponseError, ClientSession, ClientTimeout
 
+from .const import DEFAULT_REQUEST_TIMEOUT
+
 _LOGGER = logging.getLogger(__name__)
 
-# The pump's embedded CGI server is slow and sometimes flaky over the LAN, so
-# allow a generous default timeout (well under the default 30 s polling interval).
-# Both the timeout and the polling interval are user-configurable at runtime.
-DEFAULT_TIMEOUT = 5
+
+def _url_host(host: str) -> str:
+    """Return the host as written in a URL: an IPv6 address goes in brackets (RFC 3986)."""
+    try:
+        ipaddress.IPv6Address(host)
+    except ValueError:
+        return host
+    return f"[{host}]"
 
 
 class PumpError(Exception):
@@ -20,8 +27,8 @@ class PumpError(Exception):
 class PumpAPI:
     """HTTP client for the Emaux SPV150 pump."""
 
-    def __init__(self, host: str, session: ClientSession, timeout: float = DEFAULT_TIMEOUT) -> None:
-        self._host = host
+    def __init__(self, host: str, session: ClientSession, timeout: float = DEFAULT_REQUEST_TIMEOUT) -> None:
+        self._base_url = f"http://{_url_host(host)}/cgi-bin/EpvCgi"
         self._session = session
         self._timeout = ClientTimeout(total=timeout)
 
@@ -57,7 +64,7 @@ class PumpAPI:
 
     async def get_status(self) -> dict[str, Any]:
         """Fetch the current pump status."""
-        url = f"http://{self._host}/cgi-bin/EpvCgi?name=AllRd&val=0&type=get&time=Date.now()"
+        url = f"{self._base_url}?name=AllRd&val=0&type=get&time=Date.now()"
         status = await self._make_request(url)
         if not status:
             raise PumpError("Pump returned an empty status")
@@ -66,7 +73,7 @@ class PumpAPI:
     async def set_key(self, key: str, value: int) -> str:
         """Set a supported pump command key to the given value and return the value the pump echoed."""
         safe_key = quote(str(key), safe="")
-        url = f"http://{self._host}/cgi-bin/EpvCgi?name={safe_key}&val={int(value)}&type=set&time=Date.now()"
+        url = f"{self._base_url}?name={safe_key}&val={int(value)}&type=set&time=Date.now()"
         json_data = await self._make_request(url)
         result = json_data.get(key)
         if result is None:
