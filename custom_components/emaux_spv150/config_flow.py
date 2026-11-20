@@ -138,6 +138,10 @@ class EmauxSpv150ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not is_valid_host(host):
                 errors["base"] = "invalid_host"
             else:
+                if host != entry.unique_id:
+                    await self.async_set_unique_id(host)
+                    self._abort_if_unique_id_configured()
+
                 if await _pump_unreachable(self.hass, host, user_input.get(CONF_SWITCH_ENTITY)):
                     errors["base"] = "cannot_connect"
                 else:

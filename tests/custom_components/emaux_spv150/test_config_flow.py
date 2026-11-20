@@ -464,3 +464,21 @@ async def test_options_flow_saves_settings_without_contacting_the_pump_when_the_
 
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert config_entry.options["setpoint"] == 80
+
+
+@pytest.mark.asyncio
+async def test_reconfigure_to_the_host_of_another_pump_is_aborted(hass: HomeAssistant, config_entry, mock_pump_api):
+    """Two entries must not drive the same pump: reconfiguring to a host already configured is refused."""
+    other_host = "192.168.1.60"
+    other = MockConfigEntry(domain=DOMAIN, data={"host": other_host, "switch_entity": ""}, unique_id=other_host)
+    other.add_to_hass(hass)
+    await _setup_with_switch(hass, config_entry, "on")
+
+    with _patch_api():
+        result = await config_entry.start_reconfigure_flow(hass)
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input={"host": other_host})
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert (config_entry.data["host"], config_entry.unique_id) == (MOCK_HOST, MOCK_HOST)
+    assert (other.data["host"], other.unique_id) == (other_host, other_host)
