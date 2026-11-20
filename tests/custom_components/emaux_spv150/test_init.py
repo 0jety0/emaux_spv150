@@ -11,7 +11,7 @@ from custom_components.emaux_spv150.api import PumpError
 from custom_components.emaux_spv150.const import DOMAIN
 from custom_components.emaux_spv150.coordinator import PumpCoordinator
 
-from .conftest import MOCK_HOST, MOCK_STATUS, MOCK_SWITCH
+from .conftest import MOCK_GRID, MOCK_HOST, MOCK_STATUS, MOCK_SWITCH, setup_integration
 
 STATUS_URL = f"http://{MOCK_HOST}/cgi-bin/EpvCgi?name=AllRd"
 
@@ -285,3 +285,40 @@ async def test_setup_retries_when_no_switch_is_configured_and_pump_silent(
     await hass.async_block_till_done()
 
     assert config_entry.state is ConfigEntryState.SETUP_RETRY
+
+
+async def _save_options(hass: HomeAssistant, entry, user_input: dict) -> None:
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    await hass.config_entries.options.async_configure(result["flow_id"], user_input=user_input)
+    await hass.async_block_till_done()
+
+
+@pytest.mark.asyncio
+async def test_power_switch_changed_in_the_options_is_followed(
+    hass: HomeAssistant, config_entry_with_switch, mock_pump_api
+):
+    """After the options switch to another plug, flipping that plug polls the pump at once."""
+    new_switch = "switch.new_pool_power"
+    hass.states.async_set(MOCK_SWITCH, "on")
+    hass.states.async_set(new_switch, "off")
+    await setup_integration(hass, config_entry_with_switch)
+    await _save_options(hass, config_entry_with_switch, {"host": MOCK_HOST, "switch_entity": new_switch})
+    reads_before = mock_pump_api.get_status.await_count
+
+    hass.states.async_set(new_switch, "on")
+    await hass.async_block_till_done()
+
+    assert mock_pump_api.get_status.await_count == reads_before + 1
+
+
+@pytest.mark.asyncio
+async def test_grid_sensor_changed_in_the_options_is_followed(hass: HomeAssistant, solar_entry, mock_pump_api):
+    """After the options switch to another grid sensor, the solar mode regulates on that sensor."""
+    new_grid = "sensor.new_grid_power"
+    hass.states.async_set(MOCK_GRID, "50")  # inside the dead band: no change
+    hass.states.async_set(new_grid, "-2000")  # exporting: the solar mode speeds up
+    await setup_integration(hass, solar_entry)
+
+    await _save_options(hass, solar_entry, {"host": MOCK_HOST, "grid_power_entity": new_grid})
+
+    mock_pump_api.set_key.assert_awaited_once_with("SetCurrentSpeed", 1800)
