@@ -1,4 +1,3 @@
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_track_state_change_event
 
@@ -20,12 +19,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: PumpConfigEntry) -> bool
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: PumpConfigEntry) -> bool:
     """Unload the Emaux SPV150 integration cleanly."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
-async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+async def _async_update_listener(hass: HomeAssistant, entry: PumpConfigEntry) -> None:
     """Reload only when connection settings change; otherwise apply options live.
 
     Only host / switch / grid-power entity require a full reload. Regulation

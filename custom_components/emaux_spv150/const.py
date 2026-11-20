@@ -39,6 +39,10 @@ class PumpCommand(StrEnum):
     RUN_STOP = "RunStop"
 
 
+# The pump's embedded CGI server is slow and sometimes flaky over the LAN: a generous
+# default, well under the default polling interval. Both are user-adjustable.
+DEFAULT_REQUEST_TIMEOUT = 5
+
 # Default of each option, used while the option is not in the entry options.
 OPTION_DEFAULTS: Mapping[str, str | float] = {
     CONF_CONTROL_MODE: ControlMode.MANUAL,
@@ -52,7 +56,7 @@ OPTION_DEFAULTS: Mapping[str, str | float] = {
     CONF_RPM_MAX_SOLAR: 3000,
     CONF_PRIMING_TIME: 120,
     CONF_SPEED_CHANGE_INTERVAL: 60,
-    CONF_REQUEST_TIMEOUT: 5,
+    CONF_REQUEST_TIMEOUT: DEFAULT_REQUEST_TIMEOUT,
 }
 
 # Bounds shared by the number entities and the options flow.

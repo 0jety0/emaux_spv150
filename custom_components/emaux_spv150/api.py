@@ -6,12 +6,9 @@ from urllib.parse import quote
 
 from aiohttp import ClientError, ClientResponseError, ClientSession, ClientTimeout
 
-_LOGGER = logging.getLogger(__name__)
+from .const import DEFAULT_REQUEST_TIMEOUT
 
-# The pump's embedded CGI server is slow and sometimes flaky over the LAN, so
-# allow a generous default timeout (well under the default 30 s polling interval).
-# Both the timeout and the polling interval are user-configurable at runtime.
-DEFAULT_TIMEOUT = 5
+_LOGGER = logging.getLogger(__name__)
 
 
 def _url_host(host: str) -> str:
@@ -30,7 +27,7 @@ class PumpError(Exception):
 class PumpAPI:
     """HTTP client for the Emaux SPV150 pump."""
 
-    def __init__(self, host: str, session: ClientSession, timeout: float = DEFAULT_TIMEOUT) -> None:
+    def __init__(self, host: str, session: ClientSession, timeout: float = DEFAULT_REQUEST_TIMEOUT) -> None:
         self._base_url = f"http://{_url_host(host)}/cgi-bin/EpvCgi"
         self._session = session
         self._timeout = ClientTimeout(total=timeout)

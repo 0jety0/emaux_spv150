@@ -82,32 +82,22 @@ def is_switch_off(hass: HomeAssistant, entity_id: str | None) -> bool:
     return state is not None and state.state.lower() == STATE_OFF
 
 
-def is_pump_silence_expected(hass: HomeAssistant, entity_id: str | None) -> bool:
+def is_pump_silence_expected(hass: HomeAssistant, entity_id: str | None, *, setting_up: bool) -> bool:
     """Return True when a silent pump is most likely without power or still booting.
 
     That is a power switch that is not ON (off, unknown or unavailable, as an MQTT plug
     is for a while after every restart), or that turned ON less than PUMP_BOOT_TIME ago.
-    No switch, or a switch entity that does not exist, explains nothing.
+    A switch entity that does not exist explains the silence only during setup: the plug's
+    integration may start later. No switch configured explains nothing.
     """
     if not entity_id:
         return False
     state = hass.states.get(entity_id)
     if state is None:
-        return False
+        return setting_up
     if state.state.lower() != STATE_ON:
         return True
     return (dt_util.utcnow() - state.last_changed).total_seconds() < PUMP_BOOT_TIME
-
-
-def is_pump_expected_on(hass: HomeAssistant, entity_id: str | None) -> bool:
-    """Return True when the pump must answer: no power switch configured, or the switch is ON.
-
-    Used at setup, when the switch entity may not exist yet.
-    """
-    if not entity_id:
-        return True
-    state = hass.states.get(entity_id)
-    return state is not None and state.state.lower() == STATE_ON
 
 
 def grid_power_watts(state: State) -> float | None:
@@ -361,15 +351,14 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
             return
 
         # last_reported moves on every report, even with an unchanged value (last_changed does not).
-        if grid_state.last_reported is not None:
-            stale_seconds = (dt_util.utcnow() - grid_state.last_reported).total_seconds()
-            if stale_seconds > GRID_POWER_STALENESS_SECONDS:
-                self._log_grid_unusable(
-                    "Grid power entity '%s' not reported for %.0fs — skipping solar regulation",
-                    self.grid_power_entity,
-                    stale_seconds,
-                )
-                return
+        stale_seconds = (dt_util.utcnow() - grid_state.last_reported).total_seconds()
+        if stale_seconds > GRID_POWER_STALENESS_SECONDS:
+            self._log_grid_unusable(
+                "Grid power entity '%s' not reported for %.0fs — skipping solar regulation",
+                self.grid_power_entity,
+                stale_seconds,
+            )
+            return
 
         if self._grid_unusable_logged:
             _LOGGER.info("Grid power entity '%s' usable again: solar regulation resumes", self.grid_power_entity)
@@ -428,11 +417,8 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         try:
             raw = await self.api_pump.get_status()
         except PumpError as err:
-            # At setup the switch entity may not exist yet (its integration starts later).
             setting_up = self.config_entry.state is ConfigEntryState.SETUP_IN_PROGRESS
-            if (setting_up and not is_pump_expected_on(self.hass, self.switch_entity_id)) or is_pump_silence_expected(
-                self.hass, self.switch_entity_id
-            ):
+            if is_pump_silence_expected(self.hass, self.switch_entity_id, setting_up=setting_up):
                 _LOGGER.debug("Pump silent while its switch is not ON or it is booting: taken as powered off")
                 return self._powered_off()
             # Unknown power and running state during the outage: restart energy and uptime on the next answer.

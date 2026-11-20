@@ -6,7 +6,12 @@ rules:
   action-setup:
     status: exempt
     comment: No custom actions.
-  appropriate-polling: done
+  appropriate-polling:
+    status: done
+    comment: >-
+      The polling interval is user-adjustable (5 to 60 s, default 30 s) through a number
+      entity, which the rule discourages; kept on purpose so the solar regulation can be
+      made more reactive or the slow pump CGI less loaded.
   brands:
     status: done
     comment: Local brand/ icons (Home Assistant 2026.3+), added by PR #5.

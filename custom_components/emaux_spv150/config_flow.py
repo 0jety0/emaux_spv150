@@ -23,6 +23,7 @@ from .const import (
     CONF_STEP_UP,
     CONF_SWITCH_ENTITY,
     DEFAULT_HOST,
+    DEFAULT_REQUEST_TIMEOUT,
     DOMAIN,
     OPTION_DEFAULTS,
     POWER_SETTING_MAX,
@@ -67,7 +68,7 @@ async def _pump_unreachable(hass: HomeAssistant, host: str, switch_entity_id: st
     if is_switch_off(hass, switch_entity_id):
         return False
     try:
-        await PumpAPI(host, async_get_clientsession(hass)).get_status()
+        await PumpAPI(host, async_get_clientsession(hass), DEFAULT_REQUEST_TIMEOUT).get_status()
     except PumpError:
         return True
     return False
