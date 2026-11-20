@@ -12,11 +12,11 @@ authors = [{ name = "0jety0" }]
 dependencies = []
 
 [dependency-groups]
+# Home Assistant, pytest and pytest-asyncio come from pytest-homeassistant-custom-component,
+# which pins each of them to the exact version it was built for. Listing them here would let an
+# update of one of them alone force the resolver to downgrade the plugin (seen in Dependabot #16).
 dev = [
-    "homeassistant",
     "mypy",
-    "pytest",
-    "pytest-asyncio",
     "pytest-homeassistant-custom-component",
     "ruff",
 ]
