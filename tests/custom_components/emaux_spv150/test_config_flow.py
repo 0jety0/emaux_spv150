@@ -482,3 +482,20 @@ async def test_reconfigure_to_the_host_of_another_pump_is_aborted(hass: HomeAssi
     assert result["reason"] == "already_configured"
     assert (config_entry.data["host"], config_entry.unique_id) == (MOCK_HOST, MOCK_HOST)
     assert (other.data["host"], other.unique_id) == (other_host, other_host)
+
+
+@pytest.mark.asyncio
+async def test_options_flow_brings_an_old_out_of_range_value_back_within_bounds(hass: HomeAssistant, mock_pump_api):
+    """A value saved by an older version outside today's bounds must not block saving another option."""
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={"host": MOCK_HOST, "switch_entity": ""}, options={"step_up": 5}, unique_id=MOCK_HOST
+    )
+    await _setup_with_switch(hass, entry, "on")
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], user_input={"host": MOCK_HOST, "setpoint": 80}
+    )
+
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert entry.options["step_up"] == 10

@@ -1,5 +1,6 @@
 import ipaddress
 import re
+from collections.abc import Mapping
 from typing import Any, override
 
 import probatio
@@ -44,7 +45,20 @@ GRID_POWER_SELECTOR = EntitySelector(
     )
 )
 
-POWER_SETTING = probatio.All(probatio.Coerce(float), probatio.Range(min=POWER_SETTING_MIN, max=POWER_SETTING_MAX))
+
+def _bounded_field(
+    key: str, values: Mapping[str, Any], kind: type[int] | type[float], low: float, high: float
+) -> dict[probatio.Optional, probatio.All[Any]]:
+    """An options field limited to [low, high].
+
+    The default is the current value brought within the bounds: a value saved by an older version
+    outside them would otherwise make every save fail, even when the user does not touch that field.
+    """
+    current = kind(min(max(float(values[key]), low), high))
+    return {
+        probatio.Optional(key, default=current): probatio.All(probatio.Coerce(kind), probatio.Range(min=low, max=high))
+    }
+
 
 _HOSTNAME_RE = re.compile(r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))*$")
 
@@ -213,22 +227,13 @@ class EmauxSpv150OptionsFlow(config_entries.OptionsFlow):
                 # Suggested (not default) values: a default would come back when the field is cleared.
                 probatio.Optional(CONF_SWITCH_ENTITY): SWITCH_SELECTOR,
                 probatio.Optional(CONF_GRID_POWER_ENTITY): GRID_POWER_SELECTOR,
-                probatio.Optional(CONF_SETPOINT, default=values[CONF_SETPOINT]): POWER_SETTING,
-                probatio.Optional(CONF_DEAD_BAND_LOWER, default=values[CONF_DEAD_BAND_LOWER]): POWER_SETTING,
-                probatio.Optional(CONF_DEAD_BAND_UPPER, default=values[CONF_DEAD_BAND_UPPER]): POWER_SETTING,
-                probatio.Optional(CONF_STEP_UP, default=values[CONF_STEP_UP]): probatio.All(
-                    probatio.Coerce(int), probatio.Range(min=STEP_UP_MIN, max=STEP_UP_MAX)
-                ),
-                probatio.Optional(CONF_STEP_DOWN, default=values[CONF_STEP_DOWN]): probatio.All(
-                    probatio.Coerce(int), probatio.Range(min=STEP_DOWN_MIN, max=STEP_DOWN_MAX)
-                ),
-                probatio.Optional(CONF_PRIMING_TIME, default=values[CONF_PRIMING_TIME]): probatio.All(
-                    probatio.Coerce(int), probatio.Range(min=60, max=1200)
-                ),
-                probatio.Optional(
-                    CONF_SPEED_CHANGE_INTERVAL,
-                    default=values[CONF_SPEED_CHANGE_INTERVAL],
-                ): probatio.All(probatio.Coerce(int), probatio.Range(min=0, max=300)),
+                **_bounded_field(CONF_SETPOINT, values, float, POWER_SETTING_MIN, POWER_SETTING_MAX),
+                **_bounded_field(CONF_DEAD_BAND_LOWER, values, float, POWER_SETTING_MIN, POWER_SETTING_MAX),
+                **_bounded_field(CONF_DEAD_BAND_UPPER, values, float, POWER_SETTING_MIN, POWER_SETTING_MAX),
+                **_bounded_field(CONF_STEP_UP, values, int, STEP_UP_MIN, STEP_UP_MAX),
+                **_bounded_field(CONF_STEP_DOWN, values, int, STEP_DOWN_MIN, STEP_DOWN_MAX),
+                **_bounded_field(CONF_PRIMING_TIME, values, int, 60, 1200),
+                **_bounded_field(CONF_SPEED_CHANGE_INTERVAL, values, int, 0, 300),
             }
         )
         suggested = _suggested_entities(settings.switch_entity_id, settings.grid_power_entity)
