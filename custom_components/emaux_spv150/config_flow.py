@@ -200,7 +200,11 @@ class EmauxSpv150OptionsFlow(config_entries.OptionsFlow):
                 errors[CONF_DEAD_BAND_LOWER] = "dead_band_range_invalid"
 
             if not errors:
-                if await _pump_unreachable(self.hass, user_input[CONF_HOST], user_input.get(CONF_SWITCH_ENTITY)):
+                # Only a new host needs checking: a booting or unplugged pump must not block saving a setting.
+                host_changed = user_input[CONF_HOST] != (opts.get(CONF_HOST) or data[CONF_HOST])
+                if host_changed and await _pump_unreachable(
+                    self.hass, user_input[CONF_HOST], user_input.get(CONF_SWITCH_ENTITY)
+                ):
                     errors["base"] = "cannot_connect"
                 else:
                     preserved = {k: v for k, v in self.config_entry.options.items() if k not in user_input}
