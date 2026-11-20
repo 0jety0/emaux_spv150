@@ -447,8 +447,9 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
             ):
                 _LOGGER.debug("Pump silent while its switch is not ON or it is booting: taken as powered off")
                 return self._powered_off()
-            # Unknown power during the outage: restart energy integration on the next answer.
+            # Unknown power and running state during the outage: restart energy and uptime on the next answer.
             self._last_energy_update = None
+            self._uptime_start = None
             raise UpdateFailed(
                 translation_domain=DOMAIN,
                 translation_key="update_failed",

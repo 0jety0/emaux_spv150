@@ -4,10 +4,13 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.emaux_spv150.api import PumpError
+from custom_components.emaux_spv150.const import DOMAIN
 from custom_components.emaux_spv150.coordinator import PumpCoordinator, SpeedChangeThrottled
 
 from .conftest import MOCK_GRID, MOCK_STATUS, MOCK_SWITCH, setup_integration
@@ -483,3 +486,29 @@ async def test_solar_regulation_ignores_a_grid_power_in_an_unknown_unit(
     await setup_integration(hass, solar_entry)
 
     mock_pump_api.set_key.assert_not_called()
+
+
+async def _poll_after(hass: HomeAssistant, freezer, delay: timedelta) -> None:
+    """Let time pass and run the poll that is due."""
+    freezer.tick(delay)
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+
+def _state(hass: HomeAssistant, platform: str, key: str) -> str:
+    entity_id = er.async_get(hass).async_get_entity_id(platform, DOMAIN, f"spv150_{key}")
+    return hass.states.get(entity_id).state
+
+
+@pytest.mark.asyncio
+async def test_uptime_restarts_after_an_outage(hass: HomeAssistant, config_entry, mock_pump_api, freezer):
+    """Running time is unknown while the pump does not answer: uptime counts again from its recovery."""
+    await setup_integration(hass, config_entry)
+    mock_pump_api.get_status.side_effect = PumpError("connection refused")
+    await _poll_after(hass, freezer, timedelta(seconds=30))
+    await _poll_after(hass, freezer, timedelta(hours=5))
+
+    mock_pump_api.get_status.side_effect = None
+    await _poll_after(hass, freezer, timedelta(seconds=30))
+
+    assert float(_state(hass, "sensor", "uptime_hours")) == 0
