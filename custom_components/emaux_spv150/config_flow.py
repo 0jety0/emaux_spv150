@@ -190,6 +190,14 @@ class EmauxSpv150ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class EmauxSpv150OptionsFlow(config_entries.OptionsFlow):
     """Handle options for Emaux SPV150."""
 
+    def _host_used_by_another_entry(self, host: str) -> bool:
+        """Return True when another entry of this integration already drives the pump at host."""
+        return any(
+            connection_settings(entry).host == host
+            for entry in self.hass.config_entries.async_entries(DOMAIN)
+            if entry.entry_id != self.config_entry.entry_id
+        )
+
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle options update."""
         errors: dict[str, str] = {}
@@ -213,7 +221,9 @@ class EmauxSpv150OptionsFlow(config_entries.OptionsFlow):
             if not errors:
                 # Only a new host needs checking: a booting or unplugged pump must not block saving a setting.
                 host_changed = user_input[CONF_HOST] != settings.host
-                if host_changed and await _pump_unreachable(
+                if host_changed and self._host_used_by_another_entry(user_input[CONF_HOST]):
+                    errors["base"] = "already_configured"
+                elif host_changed and await _pump_unreachable(
                     self.hass, user_input[CONF_HOST], user_input.get(CONF_SWITCH_ENTITY)
                 ):
                     errors["base"] = "cannot_connect"

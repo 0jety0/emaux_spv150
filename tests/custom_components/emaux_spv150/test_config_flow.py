@@ -499,3 +499,19 @@ async def test_options_flow_brings_an_old_out_of_range_value_back_within_bounds(
 
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert entry.options["step_up"] == 10
+
+
+@pytest.mark.asyncio
+async def test_options_flow_refuses_the_host_of_another_pump(hass: HomeAssistant, config_entry, mock_pump_api):
+    """Two entries must not drive the same pump: the options cannot take the host of another entry either."""
+    other_host = "192.168.1.60"
+    other = MockConfigEntry(domain=DOMAIN, data={"host": other_host, "switch_entity": ""}, unique_id=other_host)
+    other.add_to_hass(hass)
+    await _setup_with_switch(hass, config_entry, "on")
+
+    with _patch_api():
+        result = await hass.config_entries.options.async_init(config_entry.entry_id)
+        result = await hass.config_entries.options.async_configure(result["flow_id"], user_input={"host": other_host})
+
+    assert result["errors"] == {"base": "already_configured"}
+    assert config_entry.options == {}
