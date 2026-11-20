@@ -43,5 +43,5 @@ class ControlModeSelect(PumpBaseEntity, SelectEntity):
     @override
     async def async_select_option(self, option: str) -> None:
         """Change the control mode and persist it."""
-        self.coordinator.set_control_mode(option)
+        self.coordinator.set_option("control_mode", option)
         self.async_write_ha_state()

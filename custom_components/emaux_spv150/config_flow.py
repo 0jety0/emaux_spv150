@@ -22,15 +22,9 @@ from .const import (
     CONF_STEP_DOWN,
     CONF_STEP_UP,
     CONF_SWITCH_ENTITY,
-    DEFAULT_DEAD_BAND_LOWER,
-    DEFAULT_DEAD_BAND_UPPER,
     DEFAULT_HOST,
-    DEFAULT_PRIMING_TIME,
-    DEFAULT_SETPOINT,
-    DEFAULT_SPEED_CHANGE_INTERVAL,
-    DEFAULT_STEP_DOWN,
-    DEFAULT_STEP_UP,
     DOMAIN,
+    OPTION_DEFAULTS,
     POWER_SETTING_MAX,
     POWER_SETTING_MIN,
     STEP_DOWN_MAX,
@@ -184,7 +178,7 @@ class EmauxSpv150OptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Handle options update."""
         errors: dict[str, str] = {}
-        opts = self.config_entry.options
+        values = {**OPTION_DEFAULTS, **self.config_entry.options}
         settings = connection_settings(self.config_entry)
 
         if user_input is not None:
@@ -218,31 +212,27 @@ class EmauxSpv150OptionsFlow(config_entries.OptionsFlow):
                 # Suggested (not default) values: a default would come back when the field is cleared.
                 probatio.Optional(CONF_SWITCH_ENTITY): SWITCH_SELECTOR,
                 probatio.Optional(CONF_GRID_POWER_ENTITY): GRID_POWER_SELECTOR,
-                probatio.Optional(CONF_SETPOINT, default=opts.get(CONF_SETPOINT, DEFAULT_SETPOINT)): POWER_SETTING,
-                probatio.Optional(
-                    CONF_DEAD_BAND_LOWER, default=opts.get(CONF_DEAD_BAND_LOWER, DEFAULT_DEAD_BAND_LOWER)
-                ): POWER_SETTING,
-                probatio.Optional(
-                    CONF_DEAD_BAND_UPPER, default=opts.get(CONF_DEAD_BAND_UPPER, DEFAULT_DEAD_BAND_UPPER)
-                ): POWER_SETTING,
-                probatio.Optional(CONF_STEP_UP, default=opts.get(CONF_STEP_UP, DEFAULT_STEP_UP)): probatio.All(
+                probatio.Optional(CONF_SETPOINT, default=values[CONF_SETPOINT]): POWER_SETTING,
+                probatio.Optional(CONF_DEAD_BAND_LOWER, default=values[CONF_DEAD_BAND_LOWER]): POWER_SETTING,
+                probatio.Optional(CONF_DEAD_BAND_UPPER, default=values[CONF_DEAD_BAND_UPPER]): POWER_SETTING,
+                probatio.Optional(CONF_STEP_UP, default=values[CONF_STEP_UP]): probatio.All(
                     probatio.Coerce(int), probatio.Range(min=STEP_UP_MIN, max=STEP_UP_MAX)
                 ),
-                probatio.Optional(CONF_STEP_DOWN, default=opts.get(CONF_STEP_DOWN, DEFAULT_STEP_DOWN)): probatio.All(
+                probatio.Optional(CONF_STEP_DOWN, default=values[CONF_STEP_DOWN]): probatio.All(
                     probatio.Coerce(int), probatio.Range(min=STEP_DOWN_MIN, max=STEP_DOWN_MAX)
                 ),
-                probatio.Optional(
-                    CONF_PRIMING_TIME, default=opts.get(CONF_PRIMING_TIME, DEFAULT_PRIMING_TIME)
-                ): probatio.All(probatio.Coerce(int), probatio.Range(min=60, max=1200)),
+                probatio.Optional(CONF_PRIMING_TIME, default=values[CONF_PRIMING_TIME]): probatio.All(
+                    probatio.Coerce(int), probatio.Range(min=60, max=1200)
+                ),
                 probatio.Optional(
                     CONF_SPEED_CHANGE_INTERVAL,
-                    default=opts.get(CONF_SPEED_CHANGE_INTERVAL, DEFAULT_SPEED_CHANGE_INTERVAL),
+                    default=values[CONF_SPEED_CHANGE_INTERVAL],
                 ): probatio.All(probatio.Coerce(int), probatio.Range(min=0, max=300)),
             }
         )
-        current = _suggested_entities(settings.switch_entity_id, settings.grid_power_entity)
+        suggested = _suggested_entities(settings.switch_entity_id, settings.grid_power_entity)
         return self.async_show_form(
             step_id="init",
-            data_schema=self.add_suggested_values_to_schema(schema, current),
+            data_schema=self.add_suggested_values_to_schema(schema, suggested),
             errors=errors,
         )

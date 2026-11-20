@@ -227,28 +227,6 @@ async def test_uptime_tracking_and_reset(hass: HomeAssistant, config_entry, mock
 
 
 @pytest.mark.asyncio
-async def test_set_rpm_min_capped_to_max(hass: HomeAssistant, config_entry):
-    """rpm_min_solar cannot exceed rpm_max_solar (invariant kept)."""
-    config_entry.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry)
-    coordinator.rpm_max_solar = 2000
-
-    coordinator.set_rpm_min_solar(2500)
-    assert coordinator.rpm_min_solar == 2000
-
-
-@pytest.mark.asyncio
-async def test_set_rpm_max_raised_to_min(hass: HomeAssistant, config_entry):
-    """rpm_max_solar cannot drop below rpm_min_solar (invariant kept)."""
-    config_entry.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry)
-    coordinator.rpm_min_solar = 1800
-
-    coordinator.set_rpm_max_solar(1000)
-    assert coordinator.rpm_max_solar == 1800
-
-
-@pytest.mark.asyncio
 async def test_solar_regulation_speeds_up_when_exporting(hass: HomeAssistant, config_entry, mock_pump_api):
     """Grid power below the dead band lower bound should speed the pump up."""
     config_entry.add_to_hass(hass)
@@ -356,28 +334,6 @@ async def test_solar_regulation_no_grid_entity_is_noop(hass: HomeAssistant, conf
 
 
 @pytest.mark.asyncio
-async def test_set_dead_band_lower_capped_to_upper(hass: HomeAssistant, config_entry):
-    """dead_band_lower cannot exceed dead_band_upper (invariant kept)."""
-    config_entry.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry)
-    coordinator.dead_band_upper = 100
-
-    coordinator.set_dead_band_lower(500)
-    assert coordinator.dead_band_lower == 100
-
-
-@pytest.mark.asyncio
-async def test_set_dead_band_upper_raised_to_lower(hass: HomeAssistant, config_entry):
-    """dead_band_upper cannot drop below dead_band_lower (invariant kept)."""
-    config_entry.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry)
-    coordinator.dead_band_lower = 200
-
-    coordinator.set_dead_band_upper(50)
-    assert coordinator.dead_band_upper == 200
-
-
-@pytest.mark.asyncio
 async def test_connection_settings_changed(hass: HomeAssistant, config_entry):
     """Only host/switch/grid changes count as a connection change (reload trigger)."""
     config_entry.add_to_hass(hass)
@@ -387,17 +343,6 @@ async def test_connection_settings_changed(hass: HomeAssistant, config_entry):
 
     coordinator.host = "10.0.0.1"
     assert coordinator.connection_settings_changed(config_entry) is True
-
-
-@pytest.mark.asyncio
-async def test_set_request_timeout_updates_api(hass: HomeAssistant, config_entry):
-    """Changing the request timeout updates both the coordinator and the API client."""
-    config_entry.add_to_hass(hass)
-    coordinator = PumpCoordinator(hass, config_entry)
-
-    coordinator.set_request_timeout(12)
-    assert coordinator.request_timeout == 12
-    assert coordinator.api_pump._timeout.total == 12
 
 
 @pytest.mark.asyncio

@@ -278,3 +278,43 @@ async def test_new_polling_interval_applies_without_a_reload(hass: HomeAssistant
     await hass.async_block_till_done()
 
     assert mock_pump_api.get_status.await_count == reads_before + 2
+
+
+async def _set_number(hass: HomeAssistant, key: str, value: float) -> None:
+    await hass.services.async_call(
+        "number", "set_value", {"entity_id": _entity_id(hass, "number", key), "value": value}, blocking=True
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("bound", "key", "value", "kept"),
+    [
+        (("rpm_max_solar", 2000), "rpm_min_solar", 2500, 2000),
+        (("rpm_min_solar", 1800), "rpm_max_solar", 1000, 1800),
+        (("dead_band_upper", 100), "dead_band_lower", 500, 100),
+        (("dead_band_lower", 50), "dead_band_upper", 0, 50),
+    ],
+)
+async def test_regulation_ranges_stay_ordered(
+    hass: HomeAssistant, config_entry, mock_pump_api, caplog, bound, key, value, kept
+):
+    """A lower bound is capped to its upper bound and the other way round, so the regulator stays valid."""
+    await _setup(hass, config_entry)
+    await _set_number(hass, *bound)
+
+    await _set_number(hass, key, value)
+
+    assert float(hass.states.get(_entity_id(hass, "number", key)).state) == kept
+    assert config_entry.options[key] == kept
+    assert f"{key} ({value}" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_new_request_timeout_applies_to_the_next_request(hass: HomeAssistant, config_entry, mock_pump_api):
+    """A request timeout changed from its entity is used by the pump client without a reload."""
+    await _setup(hass, config_entry)
+
+    await _set_number(hass, "request_timeout", 12)
+
+    mock_pump_api.set_timeout.assert_called_with(12)

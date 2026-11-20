@@ -2,7 +2,7 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, override
+from typing import override
 
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import ATTR_UNIT_OF_MEASUREMENT, CONF_HOST, STATE_OFF, STATE_ON, UnitOfPower
@@ -30,19 +30,9 @@ from .const import (
     CONF_STEP_DOWN,
     CONF_STEP_UP,
     CONF_SWITCH_ENTITY,
-    DEFAULT_DEAD_BAND_LOWER,
-    DEFAULT_DEAD_BAND_UPPER,
-    DEFAULT_POLL_INTERVAL,
-    DEFAULT_PRIMING_TIME,
-    DEFAULT_REQUEST_TIMEOUT,
-    DEFAULT_RPM_MAX_SOLAR,
-    DEFAULT_RPM_MIN_SOLAR,
-    DEFAULT_SETPOINT,
-    DEFAULT_SPEED_CHANGE_INTERVAL,
-    DEFAULT_STEP_DOWN,
-    DEFAULT_STEP_UP,
     DOMAIN,
     GRID_POWER_STALENESS_SECONDS,
+    OPTION_DEFAULTS,
     PUMP_BOOT_TIME,
 )
 from .models import PumpStatus, to_float
@@ -138,32 +128,28 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
 
     config_entry: PumpConfigEntry
 
-    def __init__(self, hass: HomeAssistant, entry: PumpConfigEntry) -> None:
-        opts = entry.options
-        settings = connection_settings(entry)
+    # Settings read from the entry options (or their default) by apply_options()
+    control_mode: str  # "off" | "manual" | "solar"
+    poll_interval: int
+    request_timeout: int
+    setpoint: float
+    dead_band_lower: float
+    dead_band_upper: float
+    step_up: int
+    step_down: int
+    rpm_min_solar: int
+    rpm_max_solar: int
+    priming_time: int
+    speed_change_interval: int
 
+    def __init__(self, hass: HomeAssistant, entry: PumpConfigEntry) -> None:
         # Connection-relevant settings: a change in any of these requires a full
         # reload (handled by the update listener in __init__.py).
+        settings = connection_settings(entry)
         self.host: str = settings.host
-        self.poll_interval: int = int(opts.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL))
-        self.request_timeout: int = int(opts.get(CONF_REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT))
-        self.api_pump = PumpAPI(settings.host, async_get_clientsession(hass), self.request_timeout)
         self.switch_entity_id: str | None = settings.switch_entity_id
-
-        # Control mode: "off" | "manual" | "solar"
-        self.control_mode: str = opts.get("control_mode", "manual")
-
-        # Solar parameters
         self.grid_power_entity: str = settings.grid_power_entity
-        self.setpoint: float = float(opts.get(CONF_SETPOINT, DEFAULT_SETPOINT))
-        self.dead_band_lower: float = float(opts.get(CONF_DEAD_BAND_LOWER, DEFAULT_DEAD_BAND_LOWER))
-        self.dead_band_upper: float = float(opts.get(CONF_DEAD_BAND_UPPER, DEFAULT_DEAD_BAND_UPPER))
-        self.step_up: int = int(opts.get(CONF_STEP_UP, DEFAULT_STEP_UP))
-        self.step_down: int = int(opts.get(CONF_STEP_DOWN, DEFAULT_STEP_DOWN))
-        self.rpm_min_solar: int = int(opts.get(CONF_RPM_MIN_SOLAR, DEFAULT_RPM_MIN_SOLAR))
-        self.rpm_max_solar: int = int(opts.get(CONF_RPM_MAX_SOLAR, DEFAULT_RPM_MAX_SOLAR))
-        self.priming_time: int = int(opts.get(CONF_PRIMING_TIME, DEFAULT_PRIMING_TIME))
-        self.speed_change_interval: int = int(opts.get(CONF_SPEED_CHANGE_INTERVAL, DEFAULT_SPEED_CHANGE_INTERVAL))
+        self.api_pump = PumpAPI(settings.host, async_get_clientsession(hass))
 
         # Speed change throttle
         self._last_speed_change_time: datetime | None = None
@@ -191,27 +177,15 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=self.poll_interval),
             config_entry=entry,
             # After a command, re-read the pump once it has settled, without blocking the service call.
             request_refresh_debouncer=Debouncer(hass, _LOGGER, cooldown=COMMAND_SETTLE_DELAY, immediate=False),
         )
+        self.apply_options(entry)
 
     # -------------------------------------------------------------------------
-    # Option persistence
+    # Options
     # -------------------------------------------------------------------------
-
-    def _update_option(self, key: str, value: Any) -> None:
-        """Persist a single option to entry.options.
-
-        The value is already applied live on this coordinator. The update
-        listener (see __init__.py) compares connection settings and only
-        reloads when those change, so this local persist does not reload.
-        """
-        self.hass.config_entries.async_update_entry(
-            self.config_entry,
-            options={**self.config_entry.options, key: value},
-        )
 
     def connection_settings_changed(self, entry: PumpConfigEntry) -> bool:
         """Return True if host / switch / grid entity differ from the live values.
@@ -223,84 +197,57 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         return connection_settings(entry) != live
 
     def apply_options(self, entry: PumpConfigEntry) -> None:
-        """Re-read regulation parameters from the entry options into live state.
+        """Read the settings from the entry options (or their default) into the live state.
 
-        Called by the update listener when no connection setting changed, so an
-        options-flow edit applies without a reload (and a number-entity write is
-        simply re-applied idempotently).
+        Called at start-up and by the update listener when no connection setting changed, so an
+        options-flow edit applies without a reload (and a number-entity write is simply re-applied).
         """
-        opts = entry.options
-        self.control_mode = opts.get("control_mode", self.control_mode)
-        self.setpoint = float(opts.get(CONF_SETPOINT, self.setpoint))
-        self.dead_band_lower = float(opts.get(CONF_DEAD_BAND_LOWER, self.dead_band_lower))
-        self.dead_band_upper = float(opts.get(CONF_DEAD_BAND_UPPER, self.dead_band_upper))
-        self.step_up = int(opts.get(CONF_STEP_UP, self.step_up))
-        self.step_down = int(opts.get(CONF_STEP_DOWN, self.step_down))
-        self.rpm_min_solar = int(opts.get(CONF_RPM_MIN_SOLAR, self.rpm_min_solar))
-        self.rpm_max_solar = int(opts.get(CONF_RPM_MAX_SOLAR, self.rpm_max_solar))
-        self.priming_time = int(opts.get(CONF_PRIMING_TIME, self.priming_time))
-        self.speed_change_interval = int(opts.get(CONF_SPEED_CHANGE_INTERVAL, self.speed_change_interval))
-        self.poll_interval = int(opts.get(CONF_POLL_INTERVAL, self.poll_interval))
+        opts = {**OPTION_DEFAULTS, **entry.options}
+        self.control_mode = str(opts["control_mode"])
+        self.setpoint = float(opts[CONF_SETPOINT])
+        self.dead_band_lower = float(opts[CONF_DEAD_BAND_LOWER])
+        self.dead_band_upper = float(opts[CONF_DEAD_BAND_UPPER])
+        self.step_up = int(opts[CONF_STEP_UP])
+        self.step_down = int(opts[CONF_STEP_DOWN])
+        self.rpm_min_solar = int(opts[CONF_RPM_MIN_SOLAR])
+        self.rpm_max_solar = int(opts[CONF_RPM_MAX_SOLAR])
+        self.priming_time = int(opts[CONF_PRIMING_TIME])
+        self.speed_change_interval = int(opts[CONF_SPEED_CHANGE_INTERVAL])
+        self.poll_interval = int(opts[CONF_POLL_INTERVAL])
         self.update_interval = timedelta(seconds=self.poll_interval)
-        self.request_timeout = int(opts.get(CONF_REQUEST_TIMEOUT, self.request_timeout))
+        self.request_timeout = int(opts[CONF_REQUEST_TIMEOUT])
         self.api_pump.set_timeout(self.request_timeout)
         self.async_update_listeners()
 
-    def set_control_mode(self, mode: str) -> None:
-        self.control_mode = mode
-        self._update_option("control_mode", mode)
+    def set_option(self, key: str, value: float | str) -> None:
+        """Keep one setting in the entry options and apply it live.
 
-    def set_setpoint(self, value: float) -> None:
-        self.setpoint = value
-        self._update_option(CONF_SETPOINT, value)
+        Whole-number settings are stored as int, as the options flow stores them. Saving does not
+        reload: the update listener (see __init__.py) only reloads on a connection change.
+        """
+        if isinstance(OPTION_DEFAULTS[key], int):
+            value = int(value)
+        value = self._keep_ranges_ordered(key, value)
+        self.hass.config_entries.async_update_entry(
+            self.config_entry, options={**self.config_entry.options, key: value}
+        )
+        self.apply_options(self.config_entry)
 
-    def set_dead_band_lower(self, value: float) -> None:
-        # Keep the invariant lower <= upper so the P-controller dead band stays valid.
-        if value > self.dead_band_upper:
+    def _keep_ranges_ordered(self, key: str, value: float | str) -> float | str:
+        """Keep dead_band_lower <= dead_band_upper and rpm_min_solar <= rpm_max_solar, so the regulator stays valid."""
+        if key == CONF_DEAD_BAND_LOWER and float(value) > self.dead_band_upper:
             _LOGGER.warning("dead_band_lower (%s) capped to dead_band_upper (%s)", value, self.dead_band_upper)
-            value = self.dead_band_upper
-        self.dead_band_lower = value
-        self._update_option(CONF_DEAD_BAND_LOWER, value)
-
-    def set_dead_band_upper(self, value: float) -> None:
-        if value < self.dead_band_lower:
+            return self.dead_band_upper
+        if key == CONF_DEAD_BAND_UPPER and float(value) < self.dead_band_lower:
             _LOGGER.warning("dead_band_upper (%s) raised to dead_band_lower (%s)", value, self.dead_band_lower)
-            value = self.dead_band_lower
-        self.dead_band_upper = value
-        self._update_option(CONF_DEAD_BAND_UPPER, value)
-
-    def set_step_up(self, value: int) -> None:
-        self.step_up = value
-        self._update_option(CONF_STEP_UP, value)
-
-    def set_step_down(self, value: int) -> None:
-        self.step_down = value
-        self._update_option(CONF_STEP_DOWN, value)
-
-    def set_rpm_min_solar(self, value: int) -> None:
-        # Keep the invariant rpm_min <= rpm_max so the P-controller stays valid.
-        if value > self.rpm_max_solar:
+            return self.dead_band_lower
+        if key == CONF_RPM_MIN_SOLAR and float(value) > self.rpm_max_solar:
             _LOGGER.warning("rpm_min_solar (%d) capped to rpm_max_solar (%d)", value, self.rpm_max_solar)
-            value = self.rpm_max_solar
-        self.rpm_min_solar = value
-        self._update_option(CONF_RPM_MIN_SOLAR, value)
-
-    def set_rpm_max_solar(self, value: int) -> None:
-        if value < self.rpm_min_solar:
+            return self.rpm_max_solar
+        if key == CONF_RPM_MAX_SOLAR and float(value) < self.rpm_min_solar:
             _LOGGER.warning("rpm_max_solar (%d) raised to rpm_min_solar (%d)", value, self.rpm_min_solar)
-            value = self.rpm_min_solar
-        self.rpm_max_solar = value
-        self._update_option(CONF_RPM_MAX_SOLAR, value)
-
-    def set_poll_interval(self, value: int) -> None:
-        self.poll_interval = value
-        self.update_interval = timedelta(seconds=value)
-        self._update_option(CONF_POLL_INTERVAL, value)
-
-    def set_request_timeout(self, value: int) -> None:
-        self.request_timeout = value
-        self.api_pump.set_timeout(value)
-        self._update_option(CONF_REQUEST_TIMEOUT, value)
+            return self.rpm_min_solar
+        return value
 
     # -------------------------------------------------------------------------
     # Pump command

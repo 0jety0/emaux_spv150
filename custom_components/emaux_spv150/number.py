@@ -11,7 +11,23 @@ from homeassistant.const import REVOLUTIONS_PER_MINUTE, EntityCategory, UnitOfPo
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import POWER_SETTING_MAX, POWER_SETTING_MIN, STEP_DOWN_MAX, STEP_DOWN_MIN, STEP_UP_MAX, STEP_UP_MIN
+from .const import (
+    CONF_DEAD_BAND_LOWER,
+    CONF_DEAD_BAND_UPPER,
+    CONF_POLL_INTERVAL,
+    CONF_REQUEST_TIMEOUT,
+    CONF_RPM_MAX_SOLAR,
+    CONF_RPM_MIN_SOLAR,
+    CONF_SETPOINT,
+    CONF_STEP_DOWN,
+    CONF_STEP_UP,
+    POWER_SETTING_MAX,
+    POWER_SETTING_MIN,
+    STEP_DOWN_MAX,
+    STEP_DOWN_MIN,
+    STEP_UP_MAX,
+    STEP_UP_MIN,
+)
 from .coordinator import PumpConfigEntry, PumpCoordinator
 from .entity import PumpBaseEntity
 
@@ -20,20 +36,21 @@ PARALLEL_UPDATES = 1
 
 @dataclass(frozen=True, kw_only=True)
 class PumpNumberDescription(NumberEntityDescription):
-    """Describes an Emaux SPV150 number entity.
-
-    Single source of truth: each entry carries its presentation (inherited from
-    NumberEntityDescription) and its behaviour. ``value_fn`` reads the current
-    value; writes go either to the pump (``set_key``) or locally (``set_fn``).
-    """
+    """A value read from the pump and written to it with a pump command."""
 
     value_fn: Callable[[PumpCoordinator], float | None]
-    set_key: str | None = None
-    set_fn: Callable[[PumpCoordinator, float], None] | None = None
+    command: str
 
 
-NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
-    # --- Pump-backed values (written over HTTP) ---
+@dataclass(frozen=True, kw_only=True)
+class SettingNumberDescription(NumberEntityDescription):
+    """A regulation setting kept in the entry options and applied live."""
+
+    value_fn: Callable[[PumpCoordinator], float]
+    option_key: str
+
+
+PUMP_NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
     PumpNumberDescription(
         key="current_speed",
         translation_key="current_speed",
@@ -42,7 +59,7 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
         native_step=10,
         native_unit_of_measurement=REVOLUTIONS_PER_MINUTE,
         mode=NumberMode.SLIDER,
-        set_key="SetCurrentSpeed",
+        command="SetCurrentSpeed",
         value_fn=lambda c: c.data.current_speed,
     ),
     PumpNumberDescription(
@@ -52,11 +69,13 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
         native_max_value=3,
         native_step=1,
         mode=NumberMode.SLIDER,
-        set_key="SetSpeedSelected",
+        command="SetSpeedSelected",
         value_fn=lambda c: float(c.data.speed_selected) if c.data.speed_selected is not None else None,
     ),
-    # --- Local regulation parameters (applied live, persisted in options) ---
-    PumpNumberDescription(
+)
+
+SETTING_NUMBER_DESCRIPTIONS: tuple[SettingNumberDescription, ...] = (
+    SettingNumberDescription(
         key="setpoint",
         translation_key="setpoint",
         entity_category=EntityCategory.CONFIG,
@@ -65,10 +84,10 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
         native_step=10,
         native_unit_of_measurement=UnitOfPower.WATT,
         mode=NumberMode.BOX,
+        option_key=CONF_SETPOINT,
         value_fn=lambda c: c.setpoint,
-        set_fn=lambda c, v: c.set_setpoint(float(v)),
     ),
-    PumpNumberDescription(
+    SettingNumberDescription(
         key="dead_band_lower",
         translation_key="dead_band_lower",
         entity_category=EntityCategory.CONFIG,
@@ -77,10 +96,10 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
         native_step=10,
         native_unit_of_measurement=UnitOfPower.WATT,
         mode=NumberMode.BOX,
+        option_key=CONF_DEAD_BAND_LOWER,
         value_fn=lambda c: c.dead_band_lower,
-        set_fn=lambda c, v: c.set_dead_band_lower(float(v)),
     ),
-    PumpNumberDescription(
+    SettingNumberDescription(
         key="dead_band_upper",
         translation_key="dead_band_upper",
         entity_category=EntityCategory.CONFIG,
@@ -89,10 +108,10 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
         native_step=10,
         native_unit_of_measurement=UnitOfPower.WATT,
         mode=NumberMode.BOX,
+        option_key=CONF_DEAD_BAND_UPPER,
         value_fn=lambda c: c.dead_band_upper,
-        set_fn=lambda c, v: c.set_dead_band_upper(float(v)),
     ),
-    PumpNumberDescription(
+    SettingNumberDescription(
         key="step_up",
         translation_key="step_up",
         entity_category=EntityCategory.CONFIG,
@@ -101,10 +120,10 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
         native_step=10,
         native_unit_of_measurement=REVOLUTIONS_PER_MINUTE,
         mode=NumberMode.BOX,
+        option_key=CONF_STEP_UP,
         value_fn=lambda c: float(c.step_up),
-        set_fn=lambda c, v: c.set_step_up(int(v)),
     ),
-    PumpNumberDescription(
+    SettingNumberDescription(
         key="step_down",
         translation_key="step_down",
         entity_category=EntityCategory.CONFIG,
@@ -113,10 +132,10 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
         native_step=10,
         native_unit_of_measurement=REVOLUTIONS_PER_MINUTE,
         mode=NumberMode.BOX,
+        option_key=CONF_STEP_DOWN,
         value_fn=lambda c: float(c.step_down),
-        set_fn=lambda c, v: c.set_step_down(int(v)),
     ),
-    PumpNumberDescription(
+    SettingNumberDescription(
         key="rpm_min_solar",
         translation_key="rpm_min_solar",
         entity_category=EntityCategory.CONFIG,
@@ -125,10 +144,10 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
         native_step=10,
         native_unit_of_measurement=REVOLUTIONS_PER_MINUTE,
         mode=NumberMode.BOX,
+        option_key=CONF_RPM_MIN_SOLAR,
         value_fn=lambda c: float(c.rpm_min_solar),
-        set_fn=lambda c, v: c.set_rpm_min_solar(int(v)),
     ),
-    PumpNumberDescription(
+    SettingNumberDescription(
         key="rpm_max_solar",
         translation_key="rpm_max_solar",
         entity_category=EntityCategory.CONFIG,
@@ -137,10 +156,10 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
         native_step=10,
         native_unit_of_measurement=REVOLUTIONS_PER_MINUTE,
         mode=NumberMode.BOX,
+        option_key=CONF_RPM_MAX_SOLAR,
         value_fn=lambda c: float(c.rpm_max_solar),
-        set_fn=lambda c, v: c.set_rpm_max_solar(int(v)),
     ),
-    PumpNumberDescription(
+    SettingNumberDescription(
         key="poll_interval",
         translation_key="poll_interval",
         entity_category=EntityCategory.CONFIG,
@@ -149,10 +168,10 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
         native_step=1,
         native_unit_of_measurement=UnitOfTime.SECONDS,
         mode=NumberMode.BOX,
+        option_key=CONF_POLL_INTERVAL,
         value_fn=lambda c: float(c.poll_interval),
-        set_fn=lambda c, v: c.set_poll_interval(int(v)),
     ),
-    PumpNumberDescription(
+    SettingNumberDescription(
         key="request_timeout",
         translation_key="request_timeout",
         entity_category=EntityCategory.CONFIG,
@@ -161,8 +180,8 @@ NUMBER_DESCRIPTIONS: tuple[PumpNumberDescription, ...] = (
         native_step=1,
         native_unit_of_measurement=UnitOfTime.SECONDS,
         mode=NumberMode.BOX,
+        option_key=CONF_REQUEST_TIMEOUT,
         value_fn=lambda c: float(c.request_timeout),
-        set_fn=lambda c, v: c.set_request_timeout(int(v)),
     ),
 )
 
@@ -172,11 +191,13 @@ async def async_setup_entry(
 ) -> None:
     """Set up Emaux SPV150 number entities."""
     coordinator: PumpCoordinator = entry.runtime_data
-    async_add_entities([PumpNumber(coordinator, description) for description in NUMBER_DESCRIPTIONS])
+    entities: list[NumberEntity] = [PumpNumber(coordinator, description) for description in PUMP_NUMBER_DESCRIPTIONS]
+    entities += [SettingNumber(coordinator, description) for description in SETTING_NUMBER_DESCRIPTIONS]
+    async_add_entities(entities)
 
 
 class PumpNumber(PumpBaseEntity, NumberEntity):
-    """Number entity for a controllable pump parameter."""
+    """A pump value: follows the pump's availability and is written to the pump."""
 
     entity_description: PumpNumberDescription
 
@@ -187,23 +208,36 @@ class PumpNumber(PumpBaseEntity, NumberEntity):
 
     @property
     @override
-    def available(self) -> bool:
-        """Local settings stay usable while the pump is off; pump-backed values follow the pump."""
-        return self.entity_description.set_key is None or super().available
-
-    @property
-    @override
     def native_value(self) -> float | None:
-        """Return the current value via the description's value_fn."""
         return self.entity_description.value_fn(self.coordinator)
 
     @override
     async def async_set_native_value(self, value: float) -> None:
-        """Send the new value to the pump or apply it locally on the coordinator."""
-        description = self.entity_description
-        if description.set_key is not None:
-            await self.coordinator.async_set_pump_key(description.set_key, int(value))
-            await self.coordinator.async_request_refresh()
-        elif description.set_fn is not None:
-            description.set_fn(self.coordinator, value)
-            self.async_write_ha_state()
+        await self.coordinator.async_set_pump_key(self.entity_description.command, int(value))
+        await self.coordinator.async_request_refresh()
+
+
+class SettingNumber(PumpBaseEntity, NumberEntity):
+    """A regulation setting: usable while the pump is off, applied live and kept in the options."""
+
+    entity_description: SettingNumberDescription
+
+    def __init__(self, coordinator: PumpCoordinator, description: SettingNumberDescription) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._attr_unique_id = f"spv150_{description.key}"
+
+    @property
+    @override
+    def available(self) -> bool:
+        return True
+
+    @property
+    @override
+    def native_value(self) -> float:
+        return self.entity_description.value_fn(self.coordinator)
+
+    @override
+    async def async_set_native_value(self, value: float) -> None:
+        self.coordinator.set_option(self.entity_description.option_key, value)
+        self.async_write_ha_state()
