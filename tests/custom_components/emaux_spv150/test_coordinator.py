@@ -230,23 +230,35 @@ async def test_solar_regulation_reads_the_grid_power_in_its_unit(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("grid_entity", "state_value", "attributes"),
-    [
-        (MOCK_GRID, "unavailable", {}),
-        ("sensor.other_grid_power", "-2000", {}),
-        (MOCK_GRID, "-2000", {"unit_of_measurement": "VA"}),
-    ],
-    ids=["unavailable", "missing", "unknown_unit"],
+    ("grid_entity", "state_value"),
+    [(MOCK_GRID, "unavailable"), ("sensor.other_grid_power", "-2000")],
+    ids=["unavailable", "missing"],
 )
 async def test_solar_regulation_waits_for_a_usable_grid_reading(
-    hass: HomeAssistant, solar_entry, mock_pump_api, grid_entity, state_value, attributes
+    hass: HomeAssistant, solar_entry, mock_pump_api, grid_entity, state_value
 ):
-    """A missing, non-numeric or non-power grid reading never moves the pump."""
-    hass.states.async_set(grid_entity, state_value, attributes)
+    """A missing or non-numeric grid reading never moves the pump."""
+    hass.states.async_set(grid_entity, state_value)
 
     await setup_integration(hass, solar_entry)
 
     mock_pump_api.set_key.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_grid_power_in_an_unrecognised_unit_is_read_as_watts_with_one_warning(
+    hass: HomeAssistant, solar_entry, mock_pump_api, caplog, freezer
+):
+    """Before 2.3.2 any entity could be picked as grid sensor: a unit that is not a power unit is read as W, as then."""
+    hass.states.async_set(MOCK_GRID, "-2000", {"unit_of_measurement": "VA"})
+    await setup_integration(hass, solar_entry)
+    await poll_after(hass, freezer, POLL)
+    await poll_after(hass, freezer, POLL)
+
+    assert mock_pump_api.set_key.await_args_list[0] == call("SetCurrentSpeed", 1800)
+    assert _grid_logs(caplog, logging.WARNING) == [
+        "Grid power entity 'sensor.grid_power' unit 'VA' is not recognised: its value is read as watts"
+    ]
 
 
 @pytest.mark.asyncio

@@ -101,15 +101,22 @@ def is_pump_silence_expected(hass: HomeAssistant, entity_id: str | None, *, sett
 
 
 def grid_power_watts(state: State) -> float | None:
-    """Return the grid power of a sensor state in W, or None when it is not a usable power reading.
+    """Return the grid power of a sensor state in W, or None when the state is not a number.
 
-    The grid selector accepts any power sensor (W, kW, MW...); a sensor without a unit is taken as W.
+    The grid selector accepts any power sensor (W, kW, MW...). A sensor without a unit, or with a unit
+    that is not a power unit (any entity could be picked before 2.3.2), is read as W as it always was.
     """
     value = to_float(state.state)
-    unit = state.attributes.get(ATTR_UNIT_OF_MEASUREMENT) or UnitOfPower.WATT
-    if value is None or unit not in PowerConverter.VALID_UNITS:
+    if value is None:
         return None
-    return PowerConverter.convert(value, unit, UnitOfPower.WATT)
+    if not is_power_unit(state):
+        return value
+    return PowerConverter.convert(value, state.attributes[ATTR_UNIT_OF_MEASUREMENT], UnitOfPower.WATT)
+
+
+def is_power_unit(state: State) -> bool:
+    """Return True when the state's unit of measurement is a power unit Home Assistant can convert."""
+    return state.attributes.get(ATTR_UNIT_OF_MEASUREMENT) in PowerConverter.VALID_UNITS
 
 
 class SpeedChangeThrottled(ServiceValidationError):
@@ -154,6 +161,8 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
 
         # True once a missing or stale grid sensor has been logged, until it is usable again
         self._grid_unusable_logged: bool = False
+        # True once an unrecognised grid sensor unit has been logged
+        self._grid_unit_warned: bool = False
 
         # Energy tracking
         self._energy_kwh: float = 0.0
@@ -349,6 +358,14 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
         grid_power = grid_power_watts(grid_state)
         if grid_power is None:
             return
+        unit = grid_state.attributes.get(ATTR_UNIT_OF_MEASUREMENT)
+        if unit is not None and not is_power_unit(grid_state) and not self._grid_unit_warned:
+            _LOGGER.warning(
+                "Grid power entity '%s' unit '%s' is not recognised: its value is read as watts",
+                self.grid_power_entity,
+                unit,
+            )
+            self._grid_unit_warned = True
 
         # last_reported moves on every report, even with an unchanged value (last_changed does not).
         stale_seconds = (dt_util.utcnow() - grid_state.last_reported).total_seconds()
