@@ -1,3 +1,4 @@
+import asyncio
 from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
@@ -512,3 +513,26 @@ async def test_uptime_restarts_after_an_outage(hass: HomeAssistant, config_entry
     await _poll_after(hass, freezer, timedelta(seconds=30))
 
     assert float(_state(hass, "sensor", "uptime_hours")) == 0
+
+
+@pytest.mark.asyncio
+async def test_concurrent_speed_changes_reach_the_pump_once(hass: HomeAssistant, config_entry, mock_pump_api):
+    """A manual speed change sent while the regulator's command is in flight is throttled, not sent too."""
+
+    async def slow_set_key(key: str, value: int) -> str:
+        await asyncio.sleep(0)
+        return str(value)
+
+    mock_pump_api.set_key.side_effect = slow_set_key
+    await setup_integration(hass, config_entry)
+    coordinator = config_entry.runtime_data
+
+    results = await asyncio.gather(
+        coordinator.async_set_pump_key("SetCurrentSpeed", 1800),
+        coordinator.async_set_pump_key("SetCurrentSpeed", 2000),
+        return_exceptions=True,
+    )
+
+    assert results[0] == "1800"
+    assert isinstance(results[1], SpeedChangeThrottled)
+    mock_pump_api.set_key.assert_awaited_once_with("SetCurrentSpeed", 1800)

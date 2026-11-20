@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Any, override
@@ -145,6 +146,7 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
 
         # Speed change throttle
         self._last_speed_change_time: datetime | None = None
+        self._speed_change_lock = asyncio.Lock()
 
         # Startup priming tracking (True = no priming needed until switch OFF→ON)
         self._pump_started_at: datetime | None = None
@@ -287,28 +289,37 @@ class PumpCoordinator(DataUpdateCoordinator[PumpStatus]):
 
     async def async_set_pump_key(self, key: str, value: int) -> str:
         """Send a command to the pump; a speed change within the minimum interval raises SpeedChangeThrottled."""
-        if key == "SetCurrentSpeed" and self.speed_change_interval > 0:
-            now = dt_util.utcnow()
-            if self._last_speed_change_time is not None:
-                elapsed = (now - self._last_speed_change_time).total_seconds()
-                if elapsed < self.speed_change_interval:
-                    raise SpeedChangeThrottled(
-                        translation_domain=DOMAIN,
-                        translation_key="speed_change_throttled",
-                        translation_placeholders={"interval": str(self.speed_change_interval)},
-                    )
+        if key != "SetCurrentSpeed":
+            return await self._send_pump_key(key, value)
+        # The check and the arming must not be split by the request: a manual change sent while the
+        # regulator's change is in flight would pass the check too.
+        async with self._speed_change_lock:
+            self._raise_if_speed_change_throttled()
+            result = await self._send_pump_key(key, value)
+            # Armed only once the pump accepted the change, so a failure does not block the retry.
+            self._last_speed_change_time = dt_util.utcnow()
+            return result
+
+    def _raise_if_speed_change_throttled(self) -> None:
+        if self.speed_change_interval <= 0 or self._last_speed_change_time is None:
+            return
+        elapsed = (dt_util.utcnow() - self._last_speed_change_time).total_seconds()
+        if elapsed < self.speed_change_interval:
+            raise SpeedChangeThrottled(
+                translation_domain=DOMAIN,
+                translation_key="speed_change_throttled",
+                translation_placeholders={"interval": str(self.speed_change_interval)},
+            )
+
+    async def _send_pump_key(self, key: str, value: int) -> str:
         try:
-            result = await self.api_pump.set_key(key, value)
+            return await self.api_pump.set_key(key, value)
         except PumpError as err:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="command_failed",
                 translation_placeholders={"command": key, "error": str(err)},
             ) from err
-        if key == "SetCurrentSpeed":
-            # Armed only once the pump accepted the change, so a failure does not block the retry.
-            self._last_speed_change_time = dt_util.utcnow()
-        return result
 
     # -------------------------------------------------------------------------
     # Monitoring helpers
