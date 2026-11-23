@@ -209,6 +209,13 @@ automation:
 Emaux SPV150 variable-speed pumps with the built-in Wi-Fi module, the ones you can drive from the Emaux mobile app.
 The integration talks to the same local web server. Other Emaux models have not been tested.
 
+Pumps set up with the **Smart Life** app, such as the SPV125 and SPV165, are not supported: they use a Tuya Wi-Fi
+module with no local web server. Use the Home Assistant [Tuya](https://www.home-assistant.io/integrations/tuya/)
+integration or [tuya-local](https://github.com/make-all/tuya-local) instead.
+
+To check a pump, open `http://<pump-ip>/cgi-bin/EpvCgi?name=AllRd&val=0&type=get` in a browser on the same
+network: a supported pump answers with its speed, power and status.
+
 <img alt="The Emaux mobile app showing the pump speed, power and the three speed presets" src="img/page_web.jpeg" width="240">
 
 ## Known limitations
@@ -223,6 +230,7 @@ The integration talks to the same local web server. Other Emaux models have not 
 ## Troubleshooting
 
 - **"Cannot connect" during setup**: check the IP address, that the pump is powered and on the same network. When the selected external switch is off, the check is skipped.
+  A pump added with the Smart Life app cannot connect at all (see [Supported devices](#supported-devices)).
 - **Entities unavailable**: the pump is powered off or does not answer. One error is logged when it stops answering and one line when it answers again.
 - **Speed change refused**: changes are limited to one per speed-change interval (60 s by default, 0 disables the limit).
 - **Debug logs**: add to `configuration.yaml`, then restart:
